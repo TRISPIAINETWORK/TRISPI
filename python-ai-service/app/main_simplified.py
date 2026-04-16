@@ -222,9 +222,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Bypass for internal Go→Python callbacks to avoid BaseHTTPMiddleware deadlock
-        if request.url.path.startswith("/api/internal/go/"):
-            return await call_next(request)
         response = await call_next(request)
 
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -5455,8 +5452,10 @@ async def send_transaction(req: TransactionRequest):
     _sig_verified = False
     _pqc_engine = "hybrid_ed25519_dilithium3"
     try:
-        # Canonical signing message — shared with Go relay for independent verification
-        _tx_msg_str = f"{tx_hash}:{sender}:{recipient}:{amount}:{token_symbol}:{_tx_ts}"
+        # Canonical signing message — deterministic amount as Python str() to match Go relay
+        # str() gives "1.0", "0.001" etc — same representation sent as amount_str to Go
+        _amount_str = str(amount)
+        _tx_msg_str = f"{tx_hash}:{sender}:{recipient}:{_amount_str}:{token_symbol}:{_tx_ts}"
         _tx_msg = _tx_msg_str.encode()
         _keypair = hybrid_signer.generate_hybrid_keypair()
         _sigs = hybrid_signer.sign_hybrid(_tx_msg, _keypair)
@@ -5565,6 +5564,7 @@ async def send_transaction(req: TransactionRequest):
                             "from": sender,
                             "to": recipient,
                             "amount": amount,
+                            "amount_str": _amount_str,
                             "data": f"token:{token_symbol},hash:{tx_hash}",
                             "tx_hash": tx_hash,
                             "token_symbol": token_symbol,
@@ -7643,8 +7643,9 @@ async def security_audit():
             _probe_token = "TRP"
             _probe_hash = "0" * 64  # deterministic audit hash
             _probe_ts = 1700000000  # fixed timestamp for audit probe
-            # Canonical message (same as Python send_transaction)
-            _probe_msg_str = f"{_probe_hash}:{_probe_from}:{_probe_to}:{_probe_amount}:{_probe_token}:{_probe_ts}"
+            _probe_amount_str = str(_probe_amount)
+            # Canonical message uses str(amount) for deterministic float formatting
+            _probe_msg_str = f"{_probe_hash}:{_probe_from}:{_probe_to}:{_probe_amount_str}:{_probe_token}:{_probe_ts}"
             _probe_msg = _probe_msg_str.encode()
             _probe_sigs = hybrid_signer.sign_hybrid(_probe_msg, _probe_kp)
             _probe_ed_sig = _probe_sigs.get("ed25519_sig", "")
@@ -7655,6 +7656,7 @@ async def security_audit():
                 "from": _probe_from,
                 "to": _probe_to,
                 "amount": _probe_amount,
+                "amount_str": _probe_amount_str,
                 "data": f"token:{_probe_token},hash:{_probe_hash}",
                 "tx_hash": _probe_hash,
                 "token_symbol": _probe_token,
