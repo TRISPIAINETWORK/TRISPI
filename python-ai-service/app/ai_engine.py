@@ -25,7 +25,7 @@ from typing import List, Dict, Any, Tuple
 def detect_hardware() -> dict:
     """Honest hardware capability report."""
     info: dict = {
-        "numpy": True,          # always available (we import it above)
+        "numpy": True,
         "torch": TORCH_AVAILABLE,
         "cuda": False,
         "scipy": False,
@@ -67,7 +67,6 @@ class NumPyFraudDetector:
 
     def __init__(self, input_size: int = 10, seed: int = 42):
         rng = np.random.RandomState(seed)
-        # Xavier initialisation
         self.W1 = rng.randn(input_size, 64) * np.sqrt(2.0 / input_size)
         self.b1 = np.zeros((1, 64))
         self.W2 = rng.randn(64, 32) * np.sqrt(2.0 / 64)
@@ -174,7 +173,6 @@ def _tx_features_numpy(tx: Dict[str, Any]) -> np.ndarray:
         nonce, from_len, to_len, hash_feat,
     ], dtype=np.float64)
 
-    # Normalise: log-scale large values, keep small values as-is
     norm = np.where(raw > 100, np.log1p(raw) / 20.0, raw / 100.0)
     return np.clip(norm, 0.0, 1.0)
 
@@ -186,15 +184,14 @@ def _tx_features_numpy(tx: Dict[str, Any]) -> np.ndarray:
 class ProofOfIntelligenceEngine:
     """
     Proof of Intelligence — AI-based block/transaction validation.
-    Uses the NumPy MLP as primary model; falls back to rule-based scoring
-    when the MLP is unavailable (should never happen — NumPy is always present).
+    Uses the NumPy MLP as primary model; PyTorch when available as secondary.
     """
 
     def __init__(self):
         # Primary: real NumPy MLP (always available)
         self.numpy_fraud_model = NumPyFraudDetector(input_size=10, seed=42)
 
-        # Secondary: PyTorch model (optional — only when torch present)
+        # Secondary: PyTorch model (optional)
         self._torch_fraud_model = None
         self._torch_gas_model = None
         self._torch_device = "cpu"
@@ -211,20 +208,14 @@ class ProofOfIntelligenceEngine:
         self.intelligence_score: float = 0.0
         self.hw_info = _HW
 
-    # ── Feature extraction ─────────────────────────────────────────────────
-
     def extract_tx_features(self, tx: Dict[str, Any]):
-        """Return features as NumPy array (or torch.Tensor when torch active)."""
         np_feats = _tx_features_numpy(tx)
         if TORCH_AVAILABLE and self._torch_fraud_model:
             return torch.tensor(np_feats, dtype=torch.float32).to(self._torch_device)
         return np_feats
 
-    # ── Fraud detection ────────────────────────────────────────────────────
-
     def detect_fraud(self, tx: Dict[str, Any]) -> Tuple[bool, float]:
         """Run real ML inference — returns (is_fraud, fraud_probability)."""
-        # Prefer PyTorch when available
         if TORCH_AVAILABLE and self._torch_fraud_model is not None:
             try:
                 self._torch_fraud_model.eval()
@@ -235,7 +226,6 @@ class ProofOfIntelligenceEngine:
             except Exception:
                 pass
 
-        # Always-available NumPy path
         np_feats = _tx_features_numpy(tx)
         prob = self.numpy_fraud_model.predict(np_feats)
         return prob > self.fraud_threshold, round(prob, 6)
@@ -248,10 +238,7 @@ class ProofOfIntelligenceEngine:
         probs = self.numpy_fraud_model.predict_batch(feature_matrix)
         return [(float(p) > self.fraud_threshold, round(float(p), 6)) for p in probs]
 
-    # ── Gas optimisation ───────────────────────────────────────────────────
-
     def optimize_gas(self, tx: Dict[str, Any]) -> int:
-        """Estimate optimal gas using ML or heuristic fallback."""
         if TORCH_AVAILABLE and self._torch_gas_model is not None:
             try:
                 self._torch_gas_model.eval()
@@ -270,17 +257,13 @@ class ProofOfIntelligenceEngine:
             except Exception:
                 pass
 
-        # NumPy heuristic
         base = 21000
-        base += int(len(tx.get("data", "")) * 68)         # EVM data cost
-        base += int(tx.get("storage_writes", 0) * 5000)   # SSTORE
-        base += int(tx.get("calls", 0) * 700)             # CALL opcode
+        base += int(len(tx.get("data", "")) * 68)
+        base += int(tx.get("storage_writes", 0) * 5000)
+        base += int(tx.get("calls", 0) * 700)
         return min(base, 10_000_000)
 
-    # ── Block validation ───────────────────────────────────────────────────
-
     def validate_block(self, block: Dict[str, Any]) -> Tuple[bool, float]:
-        """Validate block using AI (Proof of Intelligence)."""
         txs = block.get("transactions", [])
         if not txs:
             return True, 1.0
@@ -296,23 +279,16 @@ class ProofOfIntelligenceEngine:
     def calculate_mining_reward(self, intelligence_score: float, base_reward: float = 10.0) -> float:
         return base_reward * max(0.0, min(1.0, intelligence_score))
 
-    # ── Training ───────────────────────────────────────────────────────────
-
     def train_on_batch(self, feature_vectors: List[List[float]], labels: List[int]) -> Dict:
-        """
-        Run a training step on submitted feature vectors (from energy providers).
-        Returns real accuracy metric.
-        """
+        """Run a training step. Returns real accuracy metric."""
         if not feature_vectors or not labels:
             return {"accuracy": 0.0, "loss": 1.0, "samples": 0}
 
         X = np.array(feature_vectors, dtype=np.float64)
         y = np.array(labels, dtype=np.float64).reshape(-1, 1)
 
-        # Forward pass
         probs = self.numpy_fraud_model.predict_batch(X).reshape(-1, 1)
 
-        # Binary cross-entropy loss
         eps = 1e-9
         loss = float(-np.mean(
             y * np.log(probs + eps) + (1 - y) * np.log(1 - probs + eps)
@@ -321,7 +297,6 @@ class ProofOfIntelligenceEngine:
         preds = (probs > 0.5).astype(np.float64)
         accuracy = float(np.mean(preds == y))
 
-        # Simple gradient update (SGD on output layer bias only — safe, no instability)
         delta = probs - y
         self.numpy_fraud_model.b3 -= 0.001 * np.mean(delta, axis=0, keepdims=True)
 
@@ -332,16 +307,14 @@ class ProofOfIntelligenceEngine:
         }
 
     def apply_gradient_update(self, gradient_update: dict) -> None:
-        """Apply federated gradient from energy provider."""
         self.numpy_fraud_model.update_weights(gradient_update)
 
     def get_hardware_status(self) -> dict:
-        """Return honest hardware capability report."""
         return {**self.hw_info, "fraud_model": "NumPy MLP (10→64→32→1, sigmoid)"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  DualGovernance (unchanged API)
+#  DualGovernance
 # ══════════════════════════════════════════════════════════════════════════════
 
 class DualGovernance:
@@ -367,7 +340,6 @@ class DualGovernance:
             return 0.0
         description = self.proposals[proposal_id]["description"]
         complexity = len(description.split())
-        # Use NumPy hash-based scoring (varies by content)
         raw = float(abs(hash(description)) % 10000) / 10000.0
         score = min(1.0, (complexity / 50.0) * raw)
         self.proposals[proposal_id]["ai_recommendation"] = score
@@ -390,8 +362,6 @@ class DualGovernance:
         self.proposals[proposal_id]["status"] = status
         return status == "executed"
 
-
-# ── Module-level singletons ───────────────────────────────────────────────────
 
 def create_ai_powered_network() -> dict:
     ai_engine = ProofOfIntelligenceEngine()
