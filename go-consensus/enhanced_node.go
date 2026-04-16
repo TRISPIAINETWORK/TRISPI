@@ -3,6 +3,7 @@
 package main
 
 import (
+        "bytes"
         "crypto/ed25519"
         "crypto/sha256"
         "encoding/hex"
@@ -925,6 +926,38 @@ func (n *EnhancedNode) HandleHeartbeat(w http.ResponseWriter, r *http.Request) {
         })
 }
 
+// verifyDilithium3ViaPython calls the Python localhost bridge to verify a Dilithium3 signature.
+// Returns (true, nil) if valid, (false, nil) if invalid, (false, err) if bridge is unreachable.
+func verifyDilithium3ViaPython(canonicalMsg, sigHex, pubHex string) (bool, error) {
+        payload := fmt.Sprintf(
+                `{"message_hex":"%s","signature_hex":"%s","public_key_hex":"%s"}`,
+                hex.EncodeToString([]byte(canonicalMsg)), sigHex, pubHex,
+        )
+        req, err := http.NewRequest("POST",
+                "http://127.0.0.1:8000/api/internal/go/verify-dilithium",
+                bytes.NewBufferString(payload),
+        )
+        if err != nil {
+                return false, err
+        }
+        req.Header.Set("Content-Type", "application/json")
+        client := &http.Client{Timeout: 5 * time.Second}
+        resp, err := client.Do(req)
+        if err != nil {
+                return false, fmt.Errorf("dilithium_bridge_unreachable: %v", err)
+        }
+        defer resp.Body.Close()
+        body, _ := io.ReadAll(resp.Body)
+        var result struct {
+                Valid bool   `json:"valid"`
+                Error string `json:"error"`
+        }
+        if err2 := json.Unmarshal(body, &result); err2 != nil {
+                return false, fmt.Errorf("dilithium_bridge_invalid_response: %v", err2)
+        }
+        return result.Valid, nil
+}
+
 func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
         if r.Method != "POST" {
                 http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -952,7 +985,7 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
         }
 
         // PQC signature verification — fail-closed.
-        // All four PQC fields are required. Missing fields = rejected.
+        // All PQC fields are required: Ed25519 + Dilithium3 (hybrid mandatory).
         if req.Ed25519Sig == "" || req.Ed25519Pub == "" || req.TxHash == "" {
                 w.Header().Set("Content-Type", "application/json")
                 w.WriteHeader(http.StatusBadRequest)
@@ -960,6 +993,16 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                         "error":        "missing_pqc_fields",
                         "pqc_verified": false,
                         "detail":       "ed25519_sig, ed25519_pub, and tx_hash are required",
+                })
+                return
+        }
+        if req.Dilithium3Sig == "" || req.Dilithium3Pub == "" {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "missing_dilithium3_fields",
+                        "pqc_verified": false,
+                        "detail":       "dilithium3_sig and dilithium3_pub are required for hybrid PQC",
                 })
                 return
         }
@@ -1003,29 +1046,29 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // Dilithium3: validate hex and minimum structural size
-        // (Go stdlib has no Dilithium3 library; structural validation is maximum possible here)
-        dilNote := "dilithium3_absent"
-        if req.Dilithium3Sig != "" {
-                dilBytes, dilErr := hex.DecodeString(req.Dilithium3Sig)
-                if dilErr != nil {
-                        w.Header().Set("Content-Type", "application/json")
-                        w.WriteHeader(http.StatusBadRequest)
-                        json.NewEncoder(w).Encode(map[string]interface{}{"error": "invalid_hex_in_dilithium3_sig", "pqc_verified": false})
-                        return
-                }
-                if len(dilBytes) < 100 {
-                        w.Header().Set("Content-Type", "application/json")
-                        w.WriteHeader(http.StatusBadRequest)
-                        json.NewEncoder(w).Encode(map[string]interface{}{
-                                "error":        "dilithium3_signature_too_short",
-                                "pqc_verified": false,
-                                "bytes":        len(dilBytes),
-                        })
-                        return
-                }
-                dilNote = fmt.Sprintf("dilithium3_present_%d_bytes", len(dilBytes))
+        // Dilithium3: verify signature via Python bridge (real dilithium-py library).
+        // Go stdlib has no Dilithium3; Python hosts the verifier at a localhost-only endpoint.
+        dilithiumValid, dilErr2 := verifyDilithium3ViaPython(canonicalMsg, req.Dilithium3Sig, req.Dilithium3Pub)
+        if dilErr2 != nil {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadGateway)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "dilithium3_verifier_unavailable",
+                        "pqc_verified": false,
+                        "detail":       dilErr2.Error(),
+                })
+                return
         }
+        if !dilithiumValid {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "dilithium3_signature_invalid",
+                        "pqc_verified": false,
+                })
+                return
+        }
+        dilNote := fmt.Sprintf("dilithium3_verified_via_python_bridge")
 
         gasFee := 0.001 + float64(len(req.Data))*0.00001
 
