@@ -5447,8 +5447,13 @@ async def send_transaction(req: TransactionRequest):
     tx_hash = hashlib.sha256(f"{sender}{recipient}{amount}{token_symbol}{_tx_ts}".encode()).hexdigest()
 
     # Sign with Hybrid Ed25519 + Dilithium3 PQC
+    # A per-transaction keypair is generated; public keys are stored with the record
+    # so signatures are independently verifiable (forward-secure model).
     _ed25519_sig = ""
     _dilithium3_sig = ""
+    _ed25519_pub = ""
+    _dilithium3_pub = ""
+    _sig_verified = False
     _pqc_engine = "hybrid_ed25519_dilithium3"
     if hybrid_signer is not None:
         try:
@@ -5457,6 +5462,17 @@ async def send_transaction(req: TransactionRequest):
             _sigs = hybrid_signer.sign_hybrid(_tx_msg, _keypair)
             _ed25519_sig = _sigs.get("ed25519_sig", "")
             _dilithium3_sig = _sigs.get("dilithium3_sig", "")
+            _ed25519_pub = _keypair.get("ed25519", {}).get("public", "")
+            _dilithium3_pub = _keypair.get("dilithium3", {}).get("public", "")
+            # Verify signature round-trip immediately
+            _pub_keys = {
+                "ed25519": {"public": _ed25519_pub},
+                "dilithium3": {"public": _dilithium3_pub},
+            }
+            _verify_result = hybrid_signer.verify_hybrid(_tx_msg, _sigs, _pub_keys)
+            _sig_verified = bool(_verify_result.get("hybrid_valid", False))
+            if not _sig_verified:
+                _pqc_engine = "signature_verification_failed"
         except Exception as _sig_err:
             _pqc_engine = f"signing_error:{_sig_err}"
 
@@ -5474,6 +5490,9 @@ async def send_transaction(req: TransactionRequest):
         "gas_fee": gas_fee,
         "ed25519_sig": _ed25519_sig,
         "dilithium3_sig": _dilithium3_sig,
+        "ed25519_pub": _ed25519_pub,
+        "dilithium3_pub": _dilithium3_pub,
+        "sig_verified": _sig_verified,
         "pqc_engine": _pqc_engine,
     }
 
@@ -5531,8 +5550,18 @@ async def send_transaction(req: TransactionRequest):
                 async with _httpx.AsyncClient(timeout=3.0) as _c:
                     await _c.post(
                         f"{GO_CONSENSUS_URL}/tx",
-                        json={"from": sender, "to": recipient, "amount": amount,
-                              "data": f"token:{token_symbol},hash:{tx_hash}"},
+                        json={
+                            "from": sender,
+                            "to": recipient,
+                            "amount": amount,
+                            "data": f"token:{token_symbol},hash:{tx_hash}",
+                            "ed25519_sig": _ed25519_sig,
+                            "dilithium3_sig": _dilithium3_sig,
+                            "ed25519_pub": _ed25519_pub,
+                            "dilithium3_pub": _dilithium3_pub,
+                            "sig_verified": _sig_verified,
+                            "pqc_engine": _pqc_engine,
+                        },
                     )
             except Exception:
                 pass
@@ -5552,7 +5581,13 @@ async def send_transaction(req: TransactionRequest):
         "burn_amount": round(burn_amount, 8),
         "provider_tip": round(provider_tip, 8),
         "block": blockchain.block_height,
-        "new_balance": new_sender_balance
+        "new_balance": new_sender_balance,
+        "pqc_signing": {
+            "ed25519_sig": _ed25519_sig[:32] + "..." if len(_ed25519_sig) > 32 else _ed25519_sig,
+            "dilithium3_sig": _dilithium3_sig[:32] + "..." if len(_dilithium3_sig) > 32 else _dilithium3_sig,
+            "sig_verified": _sig_verified,
+            "pqc_engine": _pqc_engine,
+        },
     }
 
 TREASURY_ADDRESS = "trp1treasury0000000000000000000000000000"
@@ -7518,14 +7553,23 @@ async def security_audit():
     except Exception:
         pass
 
-    # 3. hybrid_signer can sign
+    # 3. hybrid_signer can sign AND verify (full round-trip)
     _tx_signing = False
     _tx_signing_err = ""
+    _tx_verify = False
     if hybrid_signer is not None:
         try:
             _kp = hybrid_signer.generate_hybrid_keypair()
-            _sg = hybrid_signer.sign_hybrid(b"audit_test", _kp)
+            _test_msg = b"audit_sign_verify_test"
+            _sg = hybrid_signer.sign_hybrid(_test_msg, _kp)
             _tx_signing = bool(_sg.get("ed25519_sig") and _sg.get("dilithium3_sig"))
+            # Round-trip verification
+            _vr = hybrid_signer.verify_hybrid(
+                _test_msg, _sg,
+                {"ed25519": {"public": _kp["ed25519"]["public"]},
+                 "dilithium3": {"public": _kp["dilithium3"]["public"]}}
+            )
+            _tx_verify = bool(_vr.get("hybrid_valid", False))
         except Exception as _e:
             _tx_signing_err = str(_e)
 
@@ -7585,7 +7629,8 @@ async def security_audit():
     # 8. Security headers active
     _security_headers = True  # always-on (HSTS, X-Frame-Options, CSP in middleware)
 
-    overall = all([_dil_real or _ed_real, _tx_signing, _block_signing, _aes_gcm])
+    # Require real Dilithium3, ed25519, working tx signing + verification, block signing, AES
+    overall = all([_dil_real, _ed_real, _tx_signing, _tx_verify, _block_signing, _aes_gcm])
 
     return {
         "audit_time": int(time.time()),
@@ -7594,6 +7639,7 @@ async def security_audit():
             "dilithium3_real": _dil_real,
             "ed25519_real": _ed_real,
             "tx_signing": _tx_signing,
+            "tx_sig_verified": _tx_verify,
             "tx_signing_error": _tx_signing_err if _tx_signing_err else None,
             "block_signing": _block_signing,
             "block_count": _block_count,
