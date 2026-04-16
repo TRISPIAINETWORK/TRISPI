@@ -989,6 +989,27 @@ async def startup_event():
     print(f"[TRISPI] Founder address: {_founder_addr or '(wallet file missing)'}")
     print(f"[TRISPI] Founder balance: {_founder_bal:,.4f} TRP")
 
+    # Derive and cache the founder Ed25519 signing keypair for identity-bound PQC signing.
+    # Uses the same derivation as the wallet: PBKDF2 → HMAC-SHA512 → SHA256 → Ed25519.
+    # The signing public key is exposed on /api/crypto/info so Go can register it at startup.
+    global _FOUNDER_ED25519_PRIV_HEX, _FOUNDER_ED25519_PUB_HEX
+    try:
+        import hmac as _hmac2
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as _EdPK2
+        with open(_WALLET_PATH) as _wf2:
+            _wdata2 = _json.load(_wf2)
+        _phrase2 = _wdata2.get("mnemonic", "")
+        if _phrase2:
+            _seed2 = hashlib.pbkdf2_hmac("sha512", _phrase2.encode(), b"mnemonic", 2048)
+            _combined2 = _seed2 + b"m/44'/888'/0'/0/0"
+            _priv2 = hashlib.sha256(_hmac2.new(b"TRISPI quantum", _combined2, hashlib.sha512).digest()[:32]).digest()
+            _ed_priv2 = _EdPK2.from_private_bytes(_priv2)
+            _FOUNDER_ED25519_PRIV_HEX = _priv2.hex()
+            _FOUNDER_ED25519_PUB_HEX = _ed_priv2.public_key().public_bytes_raw().hex()
+            print(f"[TRISPI] Founder signing key loaded — pub: {_FOUNDER_ED25519_PUB_HEX[:16]}…")
+    except Exception as _ke:
+        print(f"[TRISPI] Founder signing key derivation failed: {_ke}")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Save state on shutdown"""
@@ -2459,6 +2480,11 @@ def sync_state_background():
 
 GO_CONSENSUS_URL = os.getenv("GO_CONSENSUS_URL", "http://127.0.0.1:8084")
 RUST_CORE_URL = os.getenv("RUST_CORE_URL", "http://127.0.0.1:6000")
+
+# Founder signing keypair — derived from BIP39 mnemonic at startup (see startup_event).
+# Identity-bound: the Ed25519 pubkey's sha256[:38] equals the founder trp1 address suffix.
+_FOUNDER_ED25519_PRIV_HEX: str = ""
+_FOUNDER_ED25519_PUB_HEX: str = ""
 
 async def fetch_from_consensus(endpoint: str) -> dict:
     """Fetch data from Go consensus service"""
@@ -5438,8 +5464,8 @@ async def send_transaction(req: TransactionRequest):
     tx_hash = hashlib.sha256(f"{sender}{recipient}{amount}{token_symbol}{_tx_ts}".encode()).hexdigest()
 
     # Fail-closed: TX is rejected if PQC signing is unavailable or fails verification.
-    # A per-transaction keypair is generated; public keys are stored with the record
-    # so signatures are independently verifiable (forward-secure model).
+    # Uses the founder's persistent Ed25519 keypair (derived from BIP39 mnemonic at startup)
+    # so Go can verify that ed25519_pub → sha256[:38] matches the registered service address.
     if hybrid_signer is None:
         raise HTTPException(
             status_code=503,
@@ -5457,7 +5483,21 @@ async def send_transaction(req: TransactionRequest):
         _amount_str = str(amount)
         _tx_msg_str = f"{tx_hash}:{sender}:{recipient}:{_amount_str}:{token_symbol}:{_tx_ts}"
         _tx_msg = _tx_msg_str.encode()
-        _keypair = hybrid_signer.generate_hybrid_keypair()
+        # Use the founder's identity-bound persistent signing keypair (not ephemeral).
+        # This binds the signature to the wallet address: sha256(ed25519_pub)[:38] == trp_address[4:].
+        if _FOUNDER_ED25519_PRIV_HEX:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as _EdKP
+            _ed_priv_kp = _EdKP.from_private_bytes(bytes.fromhex(_FOUNDER_ED25519_PRIV_HEX))
+            _dil_kp = hybrid_signer.generate_hybrid_keypair()  # Dilithium: still uses random key (no seed API in dilithium-py)
+            _keypair = {
+                "ed25519": {
+                    "secret": _FOUNDER_ED25519_PRIV_HEX,
+                    "public": _ed_priv_kp.public_key().public_bytes_raw().hex(),
+                },
+                "dilithium3": _dil_kp["dilithium3"],
+            }
+        else:
+            _keypair = hybrid_signer.generate_hybrid_keypair()
         _sigs = hybrid_signer.sign_hybrid(_tx_msg, _keypair)
         _ed25519_sig = _sigs.get("ed25519_sig", "")
         _dilithium3_sig = _sigs.get("dilithium3_sig", "")
@@ -7542,6 +7582,11 @@ async def get_crypto_info():
         },
         "hash": "SHA3-256 (quantum-resistant)",
         "tx_signing": hybrid_signer is not None,
+        # Service signing identity — persistent key derived from founder BIP39 mnemonic.
+        # Go consensus registers this at startup and rejects any tx not signed with it.
+        "service_ed25519_pub": _FOUNDER_ED25519_PUB_HEX,
+        "service_address_derivation": "trp1 + sha256(ed25519_pub)[:38]",
+        "identity_bound": bool(_FOUNDER_ED25519_PUB_HEX),
     }
 
 
@@ -7635,9 +7680,20 @@ async def security_audit():
     if hybrid_signer is not None:
         try:
             import httpx as _hx
-            # Generate probe keypair
-            _probe_kp = hybrid_signer.generate_hybrid_keypair()
-            _probe_from = "trp1audit0000000000000000000000000000000"
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as _EdAudit
+            # Use the founder's persistent signing keypair (same key registered as trusted in Go).
+            # Audit probe also uses the founder address derived from this key.
+            if _FOUNDER_ED25519_PRIV_HEX:
+                _probe_ed_priv_kp = _EdAudit.from_private_bytes(bytes.fromhex(_FOUNDER_ED25519_PRIV_HEX))
+                _probe_ed_pub_bytes = _probe_ed_priv_kp.public_key().public_bytes_raw()
+                _probe_from = "trp1" + hashlib.sha256(_probe_ed_pub_bytes).hexdigest()[:38]
+                _probe_ed_pub = _probe_ed_pub_bytes.hex()
+                _audit_ed_priv_hex = _FOUNDER_ED25519_PRIV_HEX
+            else:
+                _probe_ephemeral_kp = hybrid_signer.generate_hybrid_keypair()
+                _probe_from = "trp1audit0000000000000000000000000000000"
+                _probe_ed_pub = _probe_ephemeral_kp["ed25519"]["public"]
+                _audit_ed_priv_hex = _probe_ephemeral_kp["ed25519"]["secret"]
             _probe_to   = "trp1audit0000000000000000000000000000001"
             _probe_amount = 0.001
             _probe_token = "TRP"
@@ -7647,11 +7703,16 @@ async def security_audit():
             # Canonical message uses str(amount) for deterministic float formatting
             _probe_msg_str = f"{_probe_hash}:{_probe_from}:{_probe_to}:{_probe_amount_str}:{_probe_token}:{_probe_ts}"
             _probe_msg = _probe_msg_str.encode()
-            _probe_sigs = hybrid_signer.sign_hybrid(_probe_msg, _probe_kp)
+            # Sign with the persistent keypair (ed25519 only; dilithium still random per call)
+            _probe_dil_kp = hybrid_signer.generate_hybrid_keypair()
+            _probe_kp_for_sign = {
+                "ed25519": {"secret": _audit_ed_priv_hex, "public": _probe_ed_pub},
+                "dilithium3": _probe_dil_kp["dilithium3"],
+            }
+            _probe_sigs = hybrid_signer.sign_hybrid(_probe_msg, _probe_kp_for_sign)
             _probe_ed_sig = _probe_sigs.get("ed25519_sig", "")
-            _probe_ed_pub = _probe_kp.get("ed25519", {}).get("public", "")
             _probe_dil_sig = _probe_sigs.get("dilithium3_sig", "")
-            _probe_dil_pub = _probe_kp.get("dilithium3", {}).get("public", "")
+            _probe_dil_pub = _probe_kp_for_sign["dilithium3"].get("public", "")
             _probe_payload = {
                 "from": _probe_from,
                 "to": _probe_to,
