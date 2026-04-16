@@ -117,6 +117,9 @@ type EnhancedNode struct {
         // Crypto
         PrivateKey      ed25519.PrivateKey
         PublicKey       ed25519.PublicKey
+        // Identity-bound tx signing: Python service registers its Ed25519 pubkey at startup.
+        // All incoming /tx must be signed with this key; empty = not yet registered (allow all).
+        TrustedServiceEd25519Pub string
 
         // Network stats
         Stats           *NetworkStats
@@ -1036,6 +1039,23 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                         "pqc_verified": false,
                         "got":          len(pubBytes),
                         "want":         ed25519.PublicKeySize,
+                })
+                return
+        }
+
+        // Identity binding: verify the provided pubkey matches the registered service key.
+        // TrustedServiceEd25519Pub is fetched from Python at startup via /api/crypto/info.
+        // If not yet registered (e.g. startup race), binding is skipped to avoid false rejects.
+        n.mu.RLock()
+        trustedPub := n.TrustedServiceEd25519Pub
+        n.mu.RUnlock()
+        if trustedPub != "" && req.Ed25519Pub != trustedPub {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "ed25519_pub_not_registered_service_key",
+                        "pqc_verified": false,
+                        "detail":       "tx must be signed with the registered Python service Ed25519 key",
                 })
                 return
         }
