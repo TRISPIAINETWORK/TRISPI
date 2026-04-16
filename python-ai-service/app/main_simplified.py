@@ -7793,8 +7793,11 @@ async def security_audit():
     # 8. Security headers active
     _security_headers = True  # always-on (HSTS, X-Frame-Options, CSP in middleware)
 
-    # Require real Dilithium3, ed25519, working tx signing + verification, block signing, AES
-    overall = all([_dil_real, _ed_real, _tx_signing, _tx_verify, _block_signing, _aes_gcm])
+    # Require all 8 conditions: PQC, signing, Go block verification, Rust bridge, AES
+    overall = all([
+        _dil_real, _ed_real, _tx_signing, _tx_verify,
+        _block_signing, _go_verification, _rust_bridge, _aes_gcm,
+    ])
 
     return {
         "audit_time": int(time.time()),
