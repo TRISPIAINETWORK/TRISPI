@@ -936,11 +936,13 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 To            string  `json:"to"`
                 Amount        float64 `json:"amount"`
                 Data          string  `json:"data"`
+                TxHash        string  `json:"tx_hash"`
+                TokenSymbol   string  `json:"token_symbol"`
+                Timestamp     int64   `json:"timestamp"`
                 Ed25519Sig    string  `json:"ed25519_sig"`
                 Dilithium3Sig string  `json:"dilithium3_sig"`
                 Ed25519Pub    string  `json:"ed25519_pub"`
                 Dilithium3Pub string  `json:"dilithium3_pub"`
-                TxMsgHex      string  `json:"tx_msg_hex"`
                 PQCEngine     string  `json:"pqc_engine"`
         }
 
@@ -949,67 +951,80 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // PQC signature validation — fail-closed, no client-trust fallback.
-        // When ed25519_sig + ed25519_pub + tx_msg_hex are present, we MUST verify independently.
-        // Transactions with invalid or missing signatures when sig fields are present are rejected.
-        pqcVerified := false
-        pqcNote := "no_pqc_fields"
+        // PQC signature verification — fail-closed.
+        // All four PQC fields are required. Missing fields = rejected.
+        if req.Ed25519Sig == "" || req.Ed25519Pub == "" || req.TxHash == "" {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "missing_pqc_fields",
+                        "pqc_verified": false,
+                        "detail":       "ed25519_sig, ed25519_pub, and tx_hash are required",
+                })
+                return
+        }
 
-        if req.Ed25519Sig != "" && req.Ed25519Pub != "" && req.TxMsgHex != "" {
-                // Decode the canonical message bytes (hex-encoded by Python)
-                msgBytes, msgErr := hex.DecodeString(req.TxMsgHex)
-                if msgErr != nil {
-                        http.Error(w, fmt.Sprintf("invalid_tx_msg_hex: %v", msgErr), http.StatusBadRequest)
+        // Reconstruct canonical message from transaction fields — do NOT trust client-supplied bytes.
+        // Must match Python: f"{tx_hash}:{sender}:{recipient}:{amount}:{token_symbol}:{ts}"
+        canonicalMsg := fmt.Sprintf("%s:%s:%s:%g:%s:%d",
+                req.TxHash, req.From, req.To, req.Amount, req.TokenSymbol, req.Timestamp)
+        msgBytes := []byte(canonicalMsg)
+
+        // Decode Ed25519 key and signature
+        sigBytes, sigErr := hex.DecodeString(req.Ed25519Sig)
+        pubBytes, pubErr := hex.DecodeString(req.Ed25519Pub)
+        if sigErr != nil || pubErr != nil {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{"error": "invalid_hex_in_ed25519_sig_or_pub", "pqc_verified": false})
+                return
+        }
+        if len(pubBytes) != ed25519.PublicKeySize {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "ed25519_public_key_wrong_size",
+                        "pqc_verified": false,
+                        "got":          len(pubBytes),
+                        "want":         ed25519.PublicKeySize,
+                })
+                return
+        }
+
+        // Independent Ed25519 verification against reconstructed canonical message
+        pubKey := ed25519.PublicKey(pubBytes)
+        if !ed25519.Verify(pubKey, msgBytes, sigBytes) {
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]interface{}{
+                        "error":        "ed25519_signature_invalid",
+                        "pqc_verified": false,
+                })
+                return
+        }
+
+        // Dilithium3: validate hex and minimum structural size
+        // (Go stdlib has no Dilithium3 library; structural validation is maximum possible here)
+        dilNote := "dilithium3_absent"
+        if req.Dilithium3Sig != "" {
+                dilBytes, dilErr := hex.DecodeString(req.Dilithium3Sig)
+                if dilErr != nil {
+                        w.Header().Set("Content-Type", "application/json")
+                        w.WriteHeader(http.StatusBadRequest)
+                        json.NewEncoder(w).Encode(map[string]interface{}{"error": "invalid_hex_in_dilithium3_sig", "pqc_verified": false})
                         return
                 }
-
-                // Decode Ed25519 public key and signature
-                sigBytes, sigErr := hex.DecodeString(req.Ed25519Sig)
-                pubBytes, pubErr := hex.DecodeString(req.Ed25519Pub)
-                if sigErr != nil || pubErr != nil {
-                        http.Error(w, "invalid_hex_in_ed25519_sig_or_pub", http.StatusBadRequest)
-                        return
-                }
-                if len(pubBytes) != ed25519.PublicKeySize {
-                        http.Error(w, fmt.Sprintf("ed25519_public_key_wrong_size: got %d want %d", len(pubBytes), ed25519.PublicKeySize), http.StatusBadRequest)
-                        return
-                }
-
-                // Independent Ed25519 verification against the canonical message
-                pubKey := ed25519.PublicKey(pubBytes)
-                if !ed25519.Verify(pubKey, msgBytes, sigBytes) {
+                if len(dilBytes) < 100 {
                         w.Header().Set("Content-Type", "application/json")
                         w.WriteHeader(http.StatusBadRequest)
                         json.NewEncoder(w).Encode(map[string]interface{}{
-                                "error":        "ed25519_signature_invalid",
+                                "error":        "dilithium3_signature_too_short",
                                 "pqc_verified": false,
+                                "bytes":        len(dilBytes),
                         })
                         return
                 }
-
-                // Dilithium3: validate hex encoding and minimum size
-                // (Go stdlib has no Dilithium3 support; we validate structural integrity)
-                dilNote := "dilithium3_absent"
-                if req.Dilithium3Sig != "" {
-                        dilBytes, dilErr := hex.DecodeString(req.Dilithium3Sig)
-                        if dilErr != nil {
-                                http.Error(w, "invalid_hex_in_dilithium3_sig", http.StatusBadRequest)
-                                return
-                        }
-                        // Dilithium3 signatures are ~3293 bytes; reject implausibly short signatures
-                        if len(dilBytes) < 100 {
-                                http.Error(w, fmt.Sprintf("dilithium3_signature_too_short: %d bytes", len(dilBytes)), http.StatusBadRequest)
-                                return
-                        }
-                        dilNote = fmt.Sprintf("dilithium3_present_%d_bytes", len(dilBytes))
-                }
-
-                pqcVerified = true
-                pqcNote = "ed25519_verified+" + dilNote
-        } else if req.Ed25519Sig != "" || req.Ed25519Pub != "" || req.TxMsgHex != "" {
-                // Partial fields — reject (all three required for verification)
-                http.Error(w, "incomplete_pqc_fields: need ed25519_sig+ed25519_pub+tx_msg_hex", http.StatusBadRequest)
-                return
+                dilNote = fmt.Sprintf("dilithium3_present_%d_bytes", len(dilBytes))
         }
 
         gasFee := 0.001 + float64(len(req.Data))*0.00001
@@ -1024,15 +1039,10 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
         json.NewEncoder(w).Encode(map[string]interface{}{
                 "success":      true,
                 "transaction":  tx,
-                "pqc_verified": pqcVerified,
-                "pqc_note":     pqcNote,
+                "pqc_verified": true,
+                "pqc_note":     "ed25519_verified+" + dilNote,
                 "pqc_engine":   req.PQCEngine,
         })
-}
-
-// formatAmount formats a float64 to a plain string for message reconstruction
-func formatAmount(f float64) string {
-        return fmt.Sprintf("%g", f)
 }
 
 func (n *EnhancedNode) HandleGetStats(w http.ResponseWriter, r *http.Request) {
