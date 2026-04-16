@@ -40,7 +40,7 @@ class RealProviderNode:
     energy_watts: float = 0.0
     uptime_seconds: int = 0
     last_heartbeat: int = 0
-    intelligence_score: float = 0.60   # starts at baseline, grows with training
+    intelligence_score: float = 0.60
     role: str = "compute"
     registered_at: int = field(default_factory=lambda: int(time.time()))
 
@@ -52,21 +52,16 @@ class MinerFleet:
     """
 
     def __init__(self, blockchain=None):
-        self.miners: Dict[str, RealProviderNode] = {}   # address → node
+        self.miners: Dict[str, RealProviderNode] = {}
         self.blockchain = blockchain
         self._running = False
         self._thread = None
         self._started_at = int(time.time())
         self._total_energy_wh = 0.0
-        self._total_tasks = 0
-        self._total_blocks = 0
         self._lock = threading.Lock()
 
     def initialize_fleet(self):
-        """
-        No fake miners created.
-        Only real providers (registered via API) populate this fleet.
-        """
+        """No fake miners created. Only real providers populate this fleet."""
         print("[FLEET] Real provider fleet ready — 0 registered providers (waiting for real nodes)")
         print("[FLEET] Run trispi_energy_provider.py to join the network and earn TRP")
 
@@ -105,28 +100,24 @@ class MinerFleet:
             return self.miners[address]
 
     def update_heartbeat(self, address: str, cpu_usage: float = 0.0):
-        """Update last-seen time for a real provider."""
         with self._lock:
             if address in self.miners:
                 node = self.miners[address]
                 node.last_heartbeat = int(time.time())
-                # Real energy based on actual CPU usage reported by provider
                 node.energy_watts = 5.0 + node.cpu_cores * 2.5 * max(0.1, cpu_usage / 100.0)
 
     def start(self):
-        """Start background tracking loop."""
         if self._running:
             return
         self._running = True
         self._thread = threading.Thread(target=self._tracking_loop, daemon=True)
         self._thread.start()
-        print(f"[FLEET] Provider tracker started — real providers only")
+        print("[FLEET] Provider tracker started — real providers only")
 
     def stop(self):
         self._running = False
 
     def _tracking_loop(self):
-        """Background loop: mark providers inactive if heartbeat missing >120s."""
         while self._running:
             try:
                 now = int(time.time())
@@ -139,17 +130,14 @@ class MinerFleet:
                             node.is_active = True
                         if node.is_active:
                             node.uptime_seconds = now - node.registered_at
-                            total_watts = sum(
-                                n.energy_watts for n in self.miners.values() if n.is_active
-                            )
-                            self._total_energy_wh += total_watts * (30.0 / 3600.0)
+                    total_watts = sum(n.energy_watts for n in self.miners.values() if n.is_active)
+                    self._total_energy_wh += total_watts * (30.0 / 3600.0)
                 time.sleep(30)
             except Exception as e:
                 print(f"[FLEET] Tracker error: {e}")
                 time.sleep(5)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Return honest fleet statistics — only real registered providers."""
         with self._lock:
             all_nodes = list(self.miners.values())
             active = [n for n in all_nodes if n.is_active]
@@ -173,8 +161,8 @@ class MinerFleet:
 
             return {
                 "fleet_version": FLEET_VERSION,
-                "total_miners": len(all_nodes),        # real providers registered
-                "active_miners": len(active),          # online right now
+                "total_miners": len(all_nodes),
+                "active_miners": len(active),
                 "total_cpu_cores": total_cpu,
                 "total_gpu_memory_mb": total_gpu,
                 "total_gpu_memory_gb": round(total_gpu / 1024, 1),
@@ -192,7 +180,6 @@ class MinerFleet:
             }
 
     def get_top_miners(self, limit: int = 20) -> List[Dict]:
-        """Get top real providers by TRP earned."""
         with self._lock:
             sorted_nodes = sorted(
                 self.miners.values(), key=lambda n: n.trp_earned, reverse=True
@@ -216,7 +203,6 @@ class MinerFleet:
             ]
 
     def get_miner(self, address: str) -> Dict:
-        """Get single provider info."""
         with self._lock:
             n = self.miners.get(address)
             if not n:
@@ -237,8 +223,6 @@ class MinerFleet:
                 "active": n.is_active,
             }
 
-
-# ── Module-level singleton ─────────────────────────────────────────────────────
 
 miner_fleet: MinerFleet = None
 
