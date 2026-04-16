@@ -709,14 +709,44 @@ class TRISPIAIMiner:
                 print(f"[TRISPI AI Miner] Error in PoI loop: {e}")
                 time.sleep(1)
     
-    def _process_task(self, task: Dict):
-        """Process AI training task from Energy Provider"""
+    def _process_task(self, task: Dict) -> Dict:
+        """Process AI training task from Energy Provider using NumPy MLP inference"""
         task_type = task.get("type", "training")
         provider_address = task.get("provider", "unknown")
-        
+
         if provider_address in self.energy_providers:
-            provider = self.energy_providers[provider_address]
-            provider.tasks_completed += 1
+            self.energy_providers[provider_address].tasks_completed += 1
+
+        # Run real NumPy MLP inference on submitted task data
+        result_metrics: Dict = {}
+        try:
+            from .ai_engine import ProofOfIntelligenceEngine as _PoI
+            _engine = _PoI()
+            transactions = task.get("transactions", [])
+            if transactions:
+                fraud_results = _engine.detect_fraud_batch(transactions)
+                probs = [float(p) for _, p in fraud_results]
+                result_metrics = {
+                    "transactions_analyzed": len(probs),
+                    "avg_fraud_probability": round(sum(probs) / len(probs), 6) if probs else 0.0,
+                    "fraud_detected": sum(1 for f, _ in fraud_results if f),
+                    "model": "numpy_mlp",
+                    "inference_engine": "ProofOfIntelligenceEngine (NumPy MLP)",
+                }
+            elif task.get("feature_vectors"):
+                fv = task["feature_vectors"]
+                labels = task.get("labels", [1] * len(fv))
+                train_result = _engine.train_on_batch(fv, labels)
+                result_metrics = {**train_result, "model": "numpy_mlp", "task_type": task_type}
+        except Exception as _e:
+            result_metrics = {"error": str(_e), "model": "unavailable"}
+
+        return {
+            "success": True,
+            "task_type": task_type,
+            "provider": provider_address,
+            **result_metrics,
+        }
     
     def delegate_task(self, task: Dict) -> Dict[str, Any]:
         """
