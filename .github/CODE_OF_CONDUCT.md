@@ -17,7 +17,7 @@ We pledge to make participation in the TRISPI community a harassment-free experi
 - Any conduct that would be inappropriate in a professional setting
 
 ## Enforcement
-Instances of unacceptable behaviour may be reported to the project maintainers at **conduct@trispi.org**. All reports will be reviewed and investigated promptly and fairly.
+Instances of unacceptable behaviour may be reported to the project maintainers at **trispinetwork@protonmail.com**. All reports will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/), version 2.1.
