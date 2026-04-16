@@ -4,7 +4,7 @@
 
 [![Website](https://img.shields.io/badge/Website-trispi.org-blue)](https://trispi.org)
 [![Telegram](https://img.shields.io/badge/Telegram-@trispiainetwork-26A5E4)](https://t.me/trispiainetwork)
-
+[![Chain ID](https://img.shields.io/badge/Chain%20ID-7878-green)](https://trispi.org)
 
 ---
 
@@ -30,8 +30,11 @@ TRISPI is a next-generation **Web4 blockchain** where AI agents act as validator
 ```bash
 git clone https://github.com/TRISPIAINETWORK/TRISPI.git
 cd TRISPI
-pip install requests psutil
-python3 energy-provider/trispi_energy_provider.py
+pip install requests psutil numpy
+python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS
+
+# With GPU (NVIDIA):
+python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS --gpu
 ```
 
 ### Option 2 — Run a Full Node
@@ -98,10 +101,14 @@ TRISPI/
 | Chain ID | `7878` |
 | Token Symbol | `TRP` |
 | Total Supply | `50,000,000 TRP` |
-| Block Time | `~3 seconds` |
+| Block Time | `~10 seconds` |
+| Blocks Produced | `5,000+` |
 | Consensus | `PoI + PBFT` |
+| AI Engine | `NumPy Federated Learning (real)` |
+| Post-Quantum | `Ed25519 + Dilithium3 (NIST PQC)` |
 | RPC Endpoint | `https://trispi.org/rpc` |
 | Explorer | `https://trispi.org` (Explorer tab) |
+| AI Accuracy | grows from 60% → 99% via training |
 
 ### Add to MetaMask
 
@@ -115,16 +122,37 @@ TRISPI/
 
 ## Energy Provider — Earn TRP
 
-Earn TRP tokens by contributing your compute to the TRISPI AI network:
+Earn TRP tokens by contributing your **real** CPU/GPU compute to the TRISPI AI network.
+
+The client downloads a neural network, runs **real NumPy gradient descent** on your hardware,
+and submits the gradients back — this is genuine federated learning.
 
 ```bash
-pip install requests psutil
-python3 energy-provider/trispi_energy_provider.py
+# Install:
+pip install requests psutil numpy
+
+# Run (CPU):
+python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS
+
+# Run (GPU — NVIDIA):
+python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS --gpu
+
+# Run on local node:
+python3 energy-provider/trispi_energy_provider.py --server http://localhost:8000 --wallet trp1YOUR_ADDRESS
 ```
 
+**What your device does:**
+1. Downloads AI model weights + training mini-batch from TRISPI node
+2. Runs 5 gradient descent steps (real NumPy operations on your CPU/GPU)
+3. Sends back the computed gradients (federated averaging)
+4. Earns TRP rewards based on compute quality
+
 **Reward formula:**
-- **Heartbeat** (every 10s): `block_subsidy / active_providers × compute_multiplier`
-- **AI Task**: `task_weight × quality_score`
+- **Heartbeat** (every 15s): `block_subsidy / active_providers × compute_multiplier`
+- **AI Training Task**: `0.05 TRP × quality_score` (real federated gradient)
+- **Fraud Check Task**: `0.001 TRP × accuracy`
+
+**Requirements:** Python 3.8+, `pip install requests psutil numpy`
 
 ---
 
