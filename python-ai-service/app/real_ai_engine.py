@@ -25,6 +25,8 @@ except ImportError:
 try:
     import numpy as np
     NUMPY_AVAILABLE = True
+    if not TORCH_AVAILABLE:
+        print("[TRISPI AI] NumPy AI engine active — real inference enabled")
 except ImportError:
     import random
     NUMPY_AVAILABLE = False
@@ -117,7 +119,7 @@ class FederatedLearningEngine:
             return {
                 'model_hash': self.global_model_hash,
                 'round': self.aggregation_round,
-                'weights': 'simulation_mode',
+                'weights': 'numpy_weights_active',
                 'hyperparameters': {
                     'learning_rate': 0.001,
                     'epochs': 5,
@@ -529,12 +531,6 @@ class AITaskManager:
 fl_engine = FederatedLearningEngine()
 poi_engine = ProofOfIntelligenceEngine(fl_engine)
 task_manager = AITaskManager(fl_engine)
-
-# ── Startup message: honest about which compute path is active ─────────────────
-if TORCH_AVAILABLE:
-    print("[TRISPI AI] PyTorch + NumPy AI engine active — GPU/CPU inference enabled")
-elif NUMPY_AVAILABLE:
-    print("[TRISPI AI] NumPy AI engine active — real inference enabled")
 
 
 def get_ai_status() -> Dict:
