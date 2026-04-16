@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TRISPI Network — Technical Whitepaper v1.0</title>
+<style>
+  :root{
+    --primary:#00d4ff;--secondary:#7c3aed;--accent:#10b981;--warn:#f59e0b;
+    --bg:#0a0e1a;--bg2:#111827;--bg3:#1a2235;--border:#1e3a5f;
+    --text:#e2e8f0;--muted:#94a3b8;--white:#fff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:'Georgia',serif;font-size:16px;line-height:1.8;
+  }
+  a{color:var(--primary);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ── COVER ── */
+  .cover{
+    min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:radial-gradient(ellipse 80% 60% at 50% 30%,#0d2b4e 0%,var(--bg) 70%);
+    padding:60px 24px;position:relative;overflow:hidden;
+  }
+  .cover::before{
+    content:'';position:absolute;inset:0;
+    background:url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='1' fill='%2300d4ff22'/%3E%3C/svg%3E") repeat;
+    opacity:.5;
+  }
+  .cover-logo{
+    width:100px;height:100px;margin-bottom:32px;position:relative;
+  }
+  .cover h1{font-size:clamp(2.2rem,5vw,3.8rem);font-weight:700;letter-spacing:-.02em;color:var(--white);margin-bottom:8px}
+  .cover h1 span{color:var(--primary)}
+  .cover .subtitle{font-size:1.25rem;color:var(--primary);font-weight:600;margin-bottom:24px;letter-spacing:.1em;font-family:monospace}
+  .cover .tagline{font-size:1.1rem;color:var(--muted);max-width:620px;margin:0 auto 40px}
+  .cover-meta{display:flex;gap:32px;flex-wrap:wrap;justify-content:center;font-size:.9rem;color:var(--muted)}
+  .cover-meta strong{color:var(--text)}
+  .badge{
+    display:inline-block;padding:6px 16px;border-radius:999px;
+    background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.3);
+    font-size:.82rem;color:var(--primary);font-family:monospace;margin:4px
+  }
+
+  /* ── LAYOUT ── */
+  .container{max-width:860px;margin:0 auto;padding:0 24px}
+  .page-break{page-break-before:always;border-top:1px solid var(--border);margin:60px 0}
+
+  /* ── NAV ── */
+  .toc{
+    background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+    padding:32px;margin:48px 0;
+  }
+  .toc h2{font-size:1.3rem;color:var(--primary);margin-bottom:20px;font-family:monospace}
+  .toc ol{padding-left:24px;display:grid;grid-template-columns:1fr 1fr;gap:4px 32px}
+  .toc li{font-size:.92rem;color:var(--muted);margin-bottom:6px}
+  .toc li a{color:var(--muted)}
+  .toc li a:hover{color:var(--primary)}
+  @media(max-width:600px){.toc ol{grid-template-columns:1fr}}
+
+  /* ── SECTIONS ── */
+  .section{padding:56px 0}
+  .section-num{font-size:.8rem;color:var(--primary);font-family:monospace;letter-spacing:.2em;text-transform:uppercase;margin-bottom:8px}
+  h2.section-title{font-size:clamp(1.5rem,3vw,2.1rem);color:var(--white);margin-bottom:24px;font-weight:700;border-bottom:1px solid var(--border);padding-bottom:12px}
+  h3{font-size:1.2rem;color:var(--primary);margin:28px 0 12px}
+  h4{font-size:1rem;color:var(--accent);margin:20px 0 8px}
+  p{color:var(--muted);margin-bottom:16px}
+  strong{color:var(--text)}
+  ul,ol{color:var(--muted);padding-left:24px;margin-bottom:16px}
+  li{margin-bottom:6px}
+
+  /* ── CALLOUT ── */
+  .callout{
+    border-left:3px solid var(--primary);background:rgba(0,212,255,.06);
+    padding:16px 20px;border-radius:0 8px 8px 0;margin:24px 0;
+  }
+  .callout.green{border-color:var(--accent);background:rgba(16,185,129,.06)}
+  .callout.yellow{border-color:var(--warn);background:rgba(245,158,11,.06)}
+  .callout p{margin:0;font-size:.95rem}
+
+  /* ── DIAGRAMS ── */
+  .diagram-box{
+    background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+    padding:32px;margin:32px 0;text-align:center;overflow:hidden;
+  }
+  .diagram-box .caption{font-size:.82rem;color:var(--muted);margin-top:16px;font-style:italic}
+  svg text{font-family:'Courier New',monospace}
+
+  /* ── TABLES ── */
+  .table-wrap{overflow-x:auto;margin:24px 0}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th{background:var(--bg3);color:var(--primary);font-family:monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;padding:12px 16px;border:1px solid var(--border);text-align:left}
+  td{padding:10px 16px;border:1px solid var(--border);color:var(--muted)}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  tr:hover td{background:rgba(0,212,255,.03)}
+
+  /* ── METRIC CARDS ── */
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:24px 0}
+  .metric{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center}
+  .metric .val{font-size:1.8rem;font-weight:700;color:var(--primary);font-family:monospace}
+  .metric .lbl{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+  .metric .sub{font-size:.75rem;color:var(--muted);opacity:.7;margin-top:2px}
+
+  /* ── CODE ── */
+  pre,code{font-family:'Courier New',monospace;font-size:.85rem}
+  pre{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:20px;overflow-x:auto;color:#a5d6ff;margin:16px 0}
+  code{background:rgba(0,212,255,.1);padding:2px 6px;border-radius:4px;color:var(--primary)}
+
+  /* ── ROADMAP ── */
+  .roadmap{display:flex;flex-direction:column;gap:0;margin:24px 0;position:relative}
+  .roadmap::before{content:'';position:absolute;left:16px;top:0;bottom:0;width:2px;background:var(--border)}
+  .rm-item{display:flex;gap:20px;padding:16px 0;position:relative}
+  .rm-dot{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;font-family:monospace;z-index:1}
+  .rm-dot.done{background:var(--accent);color:#fff}
+  .rm-dot.active{background:var(--primary);color:#000}
+  .rm-dot.future{background:var(--bg3);border:2px solid var(--border);color:var(--muted)}
+  .rm-content h4{margin:0 0 4px;color:var(--text);font-size:.95rem}
+  .rm-content p{margin:0;font-size:.85rem;color:var(--muted)}
+
+  /* ── FOOTER ── */
+  footer{background:var(--bg2);border-top:1px solid var(--border);padding:40px 24px;text-align:center;font-size:.85rem;color:var(--muted)}
+  footer strong{color:var(--text)}
+
+  @media print{
+    body{background:#fff;color:#000}
+    .cover{background:#fff;min-height:auto;padding:40px}
+    .cover h1,.cover h1 span,.cover .subtitle{color:#000}
+    .section{padding:32px 0}
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ COVER PAGE -->
+<div class="cover">
+  <div class="cover-logo">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#00d4ff"/>
+          <stop offset="100%" stop-color="#7c3aed"/>
+        </linearGradient>
+      </defs>
+      <polygon points="50,8 92,32 92,68 50,92 8,68 8,32" fill="none" stroke="url(#g1)" stroke-width="3"/>
+      <polygon points="50,22 78,37 78,63 50,78 22,63 22,37" fill="rgba(0,212,255,0.1)" stroke="url(#g1)" stroke-width="1.5"/>
+      <circle cx="50" cy="50" r="14" fill="url(#g1)"/>
+      <text x="50" y="55" text-anchor="middle" fill="#000" font-size="14" font-weight="bold" font-family="monospace">T</text>
+      <line x1="50" y1="8" x2="50" y2="22" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+      <line x1="92" y1="32" x2="78" y2="37" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+      <line x1="92" y1="68" x2="78" y2="63" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+      <line x1="50" y1="92" x2="50" y2="78" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+      <line x1="8" y1="68" x2="22" y2="63" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+      <line x1="8" y1="32" x2="22" y2="37" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+    </svg>
+  </div>
+  <div class="subtitle">TECHNICAL WHITEPAPER · VERSION 1.0</div>
+  <h1><span>TRISPI</span> Network</h1>
+  <p class="tagline">
+    An AI-Powered, Post-Quantum Secure, Web4 Blockchain Protocol with
+    Proof of Intelligence Consensus, Dynamic Token Economics, and Decentralised Governance
+  </p>
+  <div style="margin-bottom:32px">
+    <span class="badge">Chain ID: 7878</span>
+    <span class="badge">TRP Token</span>
+    <span class="badge">PoI Consensus</span>
+    <span class="badge">Dilithium3 PQC</span>
+    <span class="badge">EIP-1559 Burns</span>
+    <span class="badge">Web4</span>
+  </div>
+  <div class="cover-meta">
+    <div><strong>Published:</strong> April 2026</div>
+    <div><strong>Network Launch:</strong> Q2 2026</div>
+    <div><strong>Total Supply:</strong> 50,000,000 TRP</div>
+    <div><strong>Chain:</strong> TRISPI Mainnet</div>
+  </div>
+  <div style="margin-top:36px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+    <a href="/whitepaper.pdf" download="TRISPI-Whitepaper-v1.0.pdf" style="
+      display:inline-block;background:linear-gradient(135deg,#00d4ff,#7c3aed);
+      color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:1rem;
+      font-weight:700;cursor:pointer;letter-spacing:.05em;font-family:monospace;
+      box-shadow:0 4px 24px rgba(0,212,255,.3);text-decoration:none">
+      ⬇ Download PDF
+    </a>
+    <a href="https://github.com/TRISPIAINETWORK/TRISPI" target="_blank" rel="noopener" style="
+      display:inline-block;background:transparent;color:#00d4ff;
+      border:2px solid #00d4ff;padding:13px 28px;border-radius:8px;font-size:1rem;
+      font-weight:700;letter-spacing:.05em;font-family:monospace;
+      text-decoration:none;box-shadow:0 4px 24px rgba(0,212,255,.1)">
+      ⭐ GitHub Repo
+    </a>
+    <a onclick="window.print();return false;" href="#" style="
+      display:inline-block;background:transparent;color:var(--muted);
+      border:1px solid rgba(255,255,255,.2);padding:13px 24px;border-radius:8px;font-size:.9rem;
+      font-weight:600;letter-spacing:.05em;font-family:monospace;text-decoration:none">
+      🖨 Print
+    </a>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN CONTENT -->
+<div class="container">
+
+  <!-- TABLE OF CONTENTS -->
+  <div class="toc">
+    <h2>// TABLE OF CONTENTS</h2>
+    <ol>
+      <li><a href="#abstract">Abstract</a></li>
+      <li><a href="#introduction">Introduction & Vision</a></li>
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#architecture">Network Architecture</a></li>
+      <li><a href="#poi">Proof of Intelligence Consensus</a></li>
+      <li><a href="#pqc">Post-Quantum Cryptography</a></li>
+      <li><a href="#tokenomics">Token Economics (TRP)</a></li>
+      <li><a href="#ai">AI Integration Layer</a></li>
+      <li><a href="#smart-contracts">Smart Contract Engine</a></li>
+      <li><a href="#p2p">P2P Network Protocol</a></li>
+      <li><a href="#governance">Decentralised Governance</a></li>
+      <li><a href="#security">Security Model</a></li>
+      <li><a href="#web4">Web4 Vision</a></li>
+      <li><a href="#roadmap">Development Roadmap</a></li>
+      <li><a href="#specs">Technical Specifications</a></li>
+      <li><a href="#conclusion">Conclusion</a></li>
+    </ol>
+  </div>
+
+  <!-- ─────────────────────────────────────────── 1. ABSTRACT -->
+  <div class="section" id="abstract">
+    <div class="section-num">§ 01</div>
+    <h2 class="section-title">Abstract</h2>
+    <p>
+      TRISPI is a next-generation, AI-powered blockchain network designed for the Web4 era. It introduces
+      <strong>Proof of Intelligence (PoI)</strong> — a novel consensus mechanism that evaluates validator
+      contributions through a multidimensional AI scoring model rather than raw computational power or
+      staked capital alone. TRISPI combines <strong>post-quantum cryptography</strong> (Ed25519 hybrid with
+      NIST-standard Dilithium3 lattice-based signatures), a <strong>dynamic EIP-1559-style burn mechanism</strong>
+      with Bitcoin-style halving, and a <strong>three-layer service architecture</strong> (Python AI Engine,
+      Go Consensus Node, Rust Core Bridge) to deliver unprecedented security, fairness, and intelligence
+      to decentralised computation.
+    </p>
+    <p>
+      The native token <strong>TRP</strong> has a fixed genesis supply of 50,000,000 units with a deflationary
+      model driven by fee burning, halving epochs every 500,000 blocks, and AI-weighted block rewards.
+      The network is governed by a dual-layer system combining on-chain referendum voting with AI-mediated
+      proposal scoring, ensuring fair and Sybil-resistant decision making.
+    </p>
+    <div class="callout">
+      <p><strong>Core thesis:</strong> A blockchain network that uses machine intelligence to evaluate and reward
+      honest participation — making consensus smarter, more efficient, and quantum-safe.</p>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 2. INTRODUCTION -->
+  <div class="section" id="introduction">
+    <div class="section-num">§ 02</div>
+    <h2 class="section-title">Introduction & Vision</h2>
+    <p>
+      The blockchain industry has evolved through three distinct generations: Bitcoin introduced
+      decentralised, censorship-resistant value transfer (Web3 money); Ethereum added programmable
+      smart contracts (Web3 compute); and now the Web4 era demands that blockchain networks become
+      <em>intelligent infrastructure</em> — adaptive, quantum-resistant, and capable of autonomous
+      decision-making.
+    </p>
+    <p>
+      TRISPI is purpose-built for Web4. Where legacy networks reward whoever spends the most
+      electricity (PoW) or stakes the most capital (PoS), TRISPI rewards <strong>intelligence</strong>:
+      nodes that contribute meaningfully verified computation, maintain high peer reliability,
+      and build a proven reputation of honest participation receive proportionally higher block rewards.
+    </p>
+
+    <h3>Design Principles</h3>
+    <ul>
+      <li><strong>Intelligence-first consensus</strong> — AI scoring drives validator selection and reward weighting.</li>
+      <li><strong>Quantum-safe from day one</strong> — every block carries a Dilithium3 lattice signature in addition to Ed25519.</li>
+      <li><strong>Decentralised governance</strong> — no single entity controls protocol upgrades; changes require community supermajority + AI vetting.</li>
+      <li><strong>Deflationary token model</strong> — EIP-1559 burns reduce circulating supply over time; halving further constrains emission.</li>
+      <li><strong>Modular architecture</strong> — three independent services (Python, Go, Rust) can be upgraded independently without hard forks.</li>
+      <li><strong>Openness</strong> — fully open-source; validators run commodity hardware; no ASIC advantage.</li>
+    </ul>
+
+    <div class="diagram-box">
+      <svg width="100%" height="220" viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gA" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#00d4ff" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#00d4ff" stop-opacity=".05"/>
+          </linearGradient>
+          <linearGradient id="gB" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#7c3aed" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#7c3aed" stop-opacity=".05"/>
+          </linearGradient>
+          <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10b981" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#10b981" stop-opacity=".05"/>
+          </linearGradient>
+        </defs>
+        <!-- Web1 -->
+        <rect x="20" y="40" width="200" height="140" rx="10" fill="url(#gA)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="120" y="28" text-anchor="middle" fill="#94a3b8" font-size="11">WEB1 / WEB2</text>
+        <text x="120" y="72" text-anchor="middle" fill="#00d4ff" font-size="16" font-weight="bold">Bitcoin</text>
+        <text x="120" y="92" text-anchor="middle" fill="#94a3b8" font-size="10">Proof of Work</text>
+        <text x="120" y="112" text-anchor="middle" fill="#94a3b8" font-size="10">Energy-intensive</text>
+        <text x="120" y="132" text-anchor="middle" fill="#94a3b8" font-size="10">Slow, Classical</text>
+        <!-- Web3 -->
+        <rect x="280" y="40" width="200" height="140" rx="10" fill="url(#gB)" stroke="#7c3aed" stroke-width="1.5"/>
+        <text x="380" y="28" text-anchor="middle" fill="#94a3b8" font-size="11">WEB3</text>
+        <text x="380" y="72" text-anchor="middle" fill="#a78bfa" font-size="16" font-weight="bold">Ethereum</text>
+        <text x="380" y="92" text-anchor="middle" fill="#94a3b8" font-size="10">Proof of Stake</text>
+        <text x="380" y="112" text-anchor="middle" fill="#94a3b8" font-size="10">Smart Contracts</text>
+        <text x="380" y="132" text-anchor="middle" fill="#94a3b8" font-size="10">Capital-heavy</text>
+        <!-- Web4 -->
+        <rect x="540" y="20" width="200" height="180" rx="10" fill="url(#gC)" stroke="#10b981" stroke-width="2"/>
+        <text x="640" y="14" text-anchor="middle" fill="#10b981" font-size="11" font-weight="bold">WEB4 ← YOU ARE HERE</text>
+        <text x="640" y="60" text-anchor="middle" fill="#10b981" font-size="16" font-weight="bold">TRISPI</text>
+        <text x="640" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">Proof of Intelligence</text>
+        <text x="640" y="102" text-anchor="middle" fill="#94a3b8" font-size="10">AI Scoring · Quantum-safe</text>
+        <text x="640" y="122" text-anchor="middle" fill="#94a3b8" font-size="10">Dynamic Burns · Halving</text>
+        <text x="640" y="142" text-anchor="middle" fill="#94a3b8" font-size="10">Modular 3-layer arch.</text>
+        <text x="640" y="162" text-anchor="middle" fill="#94a3b8" font-size="10">Dual Governance</text>
+        <!-- arrows -->
+        <path d="M 220 110 L 278 110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+        <path d="M 480 110 L 538 110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr)" fill="none"/>
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/>
+          </marker>
+        </defs>
+      </svg>
+      <p class="caption">Figure 1 — Evolution from Web1 Proof-of-Work to TRISPI's Web4 Proof-of-Intelligence paradigm</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── 3. PROBLEM -->
+  <div class="section" id="problem">
+    <div class="section-num">§ 03</div>
+    <h2 class="section-title">Problem Statement</h2>
+
+    <h3>3.1 The Energy Problem</h3>
+    <p>
+      Bitcoin's Proof of Work consumes more electricity annually than many mid-sized nations.
+      This energy expenditure is inherently wasteful — the work performed exists solely to make
+      attacks expensive, producing no useful computation beyond the consensus itself.
+    </p>
+
+    <h3>3.2 The Plutocracy Problem</h3>
+    <p>
+      Proof of Stake systems concentrate power in the hands of the largest token holders. Wealth
+      begets influence: large stakers earn proportionally more rewards, accumulate more tokens,
+      and gain disproportionate governance weight. This reproduces traditional financial power
+      structures within decentralised systems.
+    </p>
+
+    <h3>3.3 The Quantum Threat</h3>
+    <p>
+      Current blockchain networks rely on elliptic-curve cryptography (ECDSA, Ed25519) which
+      is vulnerable to Shor's algorithm running on a sufficiently powerful quantum computer.
+      NIST estimates that quantum computers capable of breaking 256-bit ECC could exist within
+      10–15 years. <strong>No major blockchain network is quantum-resistant today.</strong>
+    </p>
+
+    <h3>3.4 The Fairness Problem</h3>
+    <p>
+      Neither PoW nor PoS rewards good behaviour — they reward resources. A validator that
+      consistently provides accurate data, maintains high uptime, and contributes to network
+      health earns no more than an equivalent validator that performs minimally.
+    </p>
+
+    <div class="callout yellow">
+      <p><strong>Summary:</strong> The blockchain industry needs a consensus mechanism that is energy-efficient,
+      fair to participants of all economic scales, quantum-resistant, and rewards genuine contribution
+      rather than raw resource ownership.</p>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 4. ARCHITECTURE -->
+  <div class="section" id="architecture">
+    <div class="section-num">§ 04</div>
+    <h2 class="section-title">Network Architecture</h2>
+    <p>
+      TRISPI's architecture separates concerns across three specialised services that communicate
+      via authenticated HTTP APIs and shared on-disk state. This modularity allows each component
+      to be upgraded, scaled, or replaced independently without requiring a hard fork of the others.
+    </p>
+
+    <div class="diagram-box">
+      <svg width="100%" height="340" viewBox="0 0 740 340" xmlns="http://www.w3.org/2000/svg">
+        <!-- Python Layer -->
+        <rect x="20" y="20" width="700" height="80" rx="10" fill="rgba(0,212,255,0.08)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="370" y="48" text-anchor="middle" fill="#00d4ff" font-size="13" font-weight="bold">PYTHON AI SERVICE  :8000</text>
+        <text x="110" y="72" text-anchor="middle" fill="#94a3b8" font-size="10">REST API + GraphQL</text>
+        <text x="260" y="72" text-anchor="middle" fill="#94a3b8" font-size="10">PoI Scoring Engine</text>
+        <text x="420" y="72" text-anchor="middle" fill="#94a3b8" font-size="10">Token Economics</text>
+        <text x="580" y="72" text-anchor="middle" fill="#94a3b8" font-size="10">AI Miner + Fleet</text>
+        <text x="680" y="72" text-anchor="middle" fill="#94a3b8" font-size="10">Governance</text>
+        <!-- Go Layer -->
+        <rect x="20" y="140" width="700" height="80" rx="10" fill="rgba(124,58,237,0.08)" stroke="#7c3aed" stroke-width="1.5"/>
+        <text x="370" y="168" text-anchor="middle" fill="#a78bfa" font-size="13" font-weight="bold">GO CONSENSUS NODE  :8084</text>
+        <text x="120" y="192" text-anchor="middle" fill="#94a3b8" font-size="10">Block Mining Loop</text>
+        <text x="280" y="192" text-anchor="middle" fill="#94a3b8" font-size="10">AI Score → PoI Select</text>
+        <text x="440" y="192" text-anchor="middle" fill="#94a3b8" font-size="10">libp2p P2P :50052</text>
+        <text x="610" y="192" text-anchor="middle" fill="#94a3b8" font-size="10">PBFT + Staking</text>
+        <!-- Rust Layer -->
+        <rect x="20" y="260" width="700" height="60" rx="10" fill="rgba(16,185,129,0.08)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="370" y="288" text-anchor="middle" fill="#10b981" font-size="13" font-weight="bold">RUST CORE BRIDGE  :6000</text>
+        <text x="150" y="308" text-anchor="middle" fill="#94a3b8" font-size="10">Dilithium3 Signing</text>
+        <text x="370" y="308" text-anchor="middle" fill="#94a3b8" font-size="10">WASM VM</text>
+        <text x="580" y="308" text-anchor="middle" fill="#94a3b8" font-size="10">EVM Adapter</text>
+        <!-- Arrows: Python ↔ Go -->
+        <line x1="370" y1="100" x2="370" y2="140" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4"/>
+        <text x="390" y="124" fill="#94a3b8" font-size="9">block-mined callback</text>
+        <!-- Arrows: Go ↔ Rust -->
+        <line x1="370" y1="220" x2="370" y2="260" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4"/>
+        <text x="390" y="244" fill="#94a3b8" font-size="9">POST /sign (Dilithium3)</text>
+      </svg>
+      <p class="caption">Figure 2 — Three-layer service architecture. Each layer communicates via authenticated HTTP; failures in one layer do not crash others.</p>
+    </div>
+
+    <h3>4.1 Python AI Service (Port 8000)</h3>
+    <p>
+      The Python layer is the <em>brain</em> of the network. It runs the Proof of Intelligence scoring
+      engine, manages the wallet and balance ledger, handles REST and GraphQL APIs for clients,
+      coordinates the AI miner fleet, and persists the canonical blockchain state to disk. It is
+      implemented with <strong>FastAPI + Uvicorn</strong> for high-throughput async request handling.
+    </p>
+    <ul>
+      <li>Proof of Intelligence (PoI) validator scoring with NumPy</li>
+      <li>EIP-1559 dynamic gas pricing and burn accounting</li>
+      <li>BIP39 mnemonic wallet derivation (Ed25519)</li>
+      <li>GraphQL API (Strawberry) for rich client queries</li>
+      <li>AI fleet management: 1,000+ miner nodes across 10 global regions</li>
+      <li>State persistence with Merkle-style state root tracking</li>
+    </ul>
+
+    <h3>4.2 Go Consensus Node (Port 8084)</h3>
+    <p>
+      The Go layer is the <em>heartbeat</em> of the network. It runs the block-mining loop, applies
+      the Practical Byzantine Fault Tolerance (PBFT) protocol for finality, manages the staking
+      ledger, and handles peer-to-peer block propagation using <strong>libp2p</strong> with both TCP
+      and QUIC transports. It also queries the Rust bridge for Dilithium3 signatures on every block.
+    </p>
+    <ul>
+      <li>Mining loop with configurable target difficulty (leading-zero hash)</li>
+      <li>AI score integration: validators are weighted by their PoI score</li>
+      <li>PBFT prepare/commit protocol for Byzantine fault tolerance (f &lt; n/3)</li>
+      <li>libp2p mDNS local discovery + DHT global peer discovery</li>
+      <li>Staking ledger: validators must stake TRP to participate</li>
+      <li>HTTP callback to Python on every confirmed block</li>
+    </ul>
+
+    <h3>4.3 Rust Core Bridge (Port 6000)</h3>
+    <p>
+      The Rust layer is the <em>security fortress</em> of the network. It provides post-quantum
+      signing services via Dilithium3 (CRYSTALS-Dilithium, NIST PQC round-3 standard), hosts
+      a WASM virtual machine for contract execution, and provides an EVM compatibility adapter
+      for Ethereum tool integration.
+    </p>
+    <ul>
+      <li>Dilithium3 lattice-based signature generation and verification</li>
+      <li>Ed25519 / Dilithium3 hybrid signing (classical + quantum-safe)</li>
+      <li>WASM VM: secure sandboxed contract execution</li>
+      <li>EVM adapter: Ethereum-compatible transaction processing</li>
+    </ul>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 5. POI -->
+  <div class="section" id="poi">
+    <div class="section-num">§ 05</div>
+    <h2 class="section-title">Proof of Intelligence Consensus</h2>
+    <p>
+      Proof of Intelligence (PoI) is TRISPI's original consensus mechanism. Instead of evaluating
+      validators by energy expenditure or staked capital, PoI evaluates them across four measurable
+      dimensions of network contribution, computed by the AI scoring engine.
+    </p>
+
+    <h3>5.1 AI Score Formula</h3>
+    <div class="callout">
+      <p><code>score = 0.45 × reputation + 0.30 × peer_score + 0.15 × tx_throughput + 0.10 × consecutive_successes</code></p>
+      <p style="margin-top:8px"><code>score ∈ [0.60, 0.99]  (clamped)</code></p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Component</th><th>Weight</th><th>Description</th><th>How it's measured</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Reputation</strong></td><td>45%</td><td>Historical accuracy and uptime over rolling window</td><td>EMA of correct block proposals vs total proposals</td></tr>
+          <tr><td><strong>Peer Score</strong></td><td>30%</td><td>Quality of P2P connections and relay speed</td><td>Connected peer count × average relay latency inverse</td></tr>
+          <tr><td><strong>TX Throughput</strong></td><td>15%</td><td>Volume of valid transactions included in blocks</td><td>tx_count / block_time normalised against network average</td></tr>
+          <tr><td><strong>Consecutive Successes</strong></td><td>10%</td><td>Streak of consecutive valid block proposals without slashing</td><td>ConsecutiveSuccesses counter, reset on any invalid block</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>5.2 Validator Selection</h3>
+    <p>
+      At each round, the Go consensus node computes a <em>weighted selection probability</em> for
+      each registered validator:
+    </p>
+    <pre>P(validator_i) = AI_score_i / Σ AI_scores_all_active_validators</pre>
+    <p>
+      A validator with score 0.90 is therefore 50% more likely to be selected as block proposer
+      than one with score 0.60. This creates a strong incentive for validators to maintain high
+      quality of service rather than simply accumulating more hardware.
+    </p>
+
+    <div class="diagram-box">
+      <svg width="100%" height="260" viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg">
+        <!-- Round start -->
+        <rect x="10" y="100" width="120" height="50" rx="8" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="70" y="121" text-anchor="middle" fill="#00d4ff" font-size="10" font-weight="bold">ROUND START</text>
+        <text x="70" y="138" text-anchor="middle" fill="#94a3b8" font-size="9">Collect validators</text>
+        <!-- AI Score -->
+        <rect x="180" y="100" width="120" height="50" rx="8" fill="rgba(124,58,237,0.15)" stroke="#7c3aed" stroke-width="1.5"/>
+        <text x="240" y="121" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="bold">AI SCORING</text>
+        <text x="240" y="138" text-anchor="middle" fill="#94a3b8" font-size="9">Compute PoI scores</text>
+        <!-- Select -->
+        <rect x="350" y="100" width="120" height="50" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="410" y="121" text-anchor="middle" fill="#10b981" font-size="10" font-weight="bold">PROPOSER SELECT</text>
+        <text x="410" y="138" text-anchor="middle" fill="#94a3b8" font-size="9">Weighted random pick</text>
+        <!-- Mine -->
+        <rect x="520" y="60" width="120" height="50" rx="8" fill="rgba(245,158,11,0.15)" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="580" y="81" text-anchor="middle" fill="#f59e0b" font-size="10" font-weight="bold">BLOCK PROPOSED</text>
+        <text x="580" y="98" text-anchor="middle" fill="#94a3b8" font-size="9">Hash + Ed25519 sign</text>
+        <!-- Dilithium -->
+        <rect x="520" y="140" width="120" height="50" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="580" y="161" text-anchor="middle" fill="#10b981" font-size="10" font-weight="bold">DILITHIUM3 SIG</text>
+        <text x="580" y="178" text-anchor="middle" fill="#94a3b8" font-size="9">Rust bridge :6000</text>
+        <!-- PBFT -->
+        <rect x="310" y="200" width="120" height="50" rx="8" fill="rgba(0,212,255,0.15)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="370" y="221" text-anchor="middle" fill="#00d4ff" font-size="10" font-weight="bold">PBFT FINALITY</text>
+        <text x="370" y="238" text-anchor="middle" fill="#94a3b8" font-size="9">2/3 validators confirm</text>
+        <!-- Reward -->
+        <rect x="480" y="200" width="120" height="50" rx="8" fill="rgba(245,158,11,0.15)" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="540" y="221" text-anchor="middle" fill="#f59e0b" font-size="10" font-weight="bold">REWARD CREDIT</text>
+        <text x="540" y="238" text-anchor="middle" fill="#94a3b8" font-size="9">Python ledger update</text>
+        <!-- Arrows -->
+        <line x1="130" y1="125" x2="178" y2="125" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="300" y1="125" x2="348" y2="125" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="470" y1="115" x2="520" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="470" y1="135" x2="520" y2="155" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="580" y1="190" x2="430" y2="200" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="580" y1="190" x2="540" y2="200" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a2)"/>
+        <line x1="370" y1="200" x2="130" y2="140" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4"/>
+        <text x="200" y="185" fill="#94a3b8" font-size="8">next round</text>
+        <defs><marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker></defs>
+      </svg>
+      <p class="caption">Figure 3 — Complete PoI consensus round: AI scoring → weighted selection → hybrid signing → PBFT finality → reward</p>
+    </div>
+
+    <h3>5.3 Slashing Conditions</h3>
+    <p>Validators that violate protocol rules are penalised via slashing — forced loss of staked TRP:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Violation</th><th>Penalty</th><th>Recovery</th></tr></thead>
+        <tbody>
+          <tr><td>Double-signing (equivocation)</td><td>100% stake slash</td><td>Permanent ban</td></tr>
+          <tr><td>Invalid block proposal</td><td>10% stake slash + reputation reset</td><td>30-day cooldown</td></tr>
+          <tr><td>Extended downtime (&gt;48h)</td><td>5% stake slash</td><td>Automatic after uptime restored</td></tr>
+          <tr><td>Spam / invalid transactions</td><td>AI score reduction</td><td>Gradual score recovery</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>5.4 Comparison with Existing Consensus Mechanisms</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Property</th><th>PoW (Bitcoin)</th><th>PoS (Ethereum)</th><th>DPoS</th><th>PoI (TRISPI)</th></tr></thead>
+        <tbody>
+          <tr><td>Energy usage</td><td>Very high</td><td>Low</td><td>Low</td><td>Minimal</td></tr>
+          <tr><td>Sybil resistance</td><td>Hash rate</td><td>Capital</td><td>Votes</td><td>AI reputation</td></tr>
+          <tr><td>Entry barrier</td><td>ASIC hardware</td><td>32 ETH min</td><td>Top-21 votes</td><td>Low stake + performance</td></tr>
+          <tr><td>Quantum safety</td><td>No</td><td>No</td><td>No</td><td>Yes (Dilithium3)</td></tr>
+          <tr><td>Rewards fairness</td><td>Resource-based</td><td>Capital-based</td><td>Vote-based</td><td>Merit-based (AI)</td></tr>
+          <tr><td>Finality</td><td>Probabilistic</td><td>~12 min</td><td>~3 s</td><td>~15 s (PBFT)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 6. PQC -->
+  <div class="section" id="pqc">
+    <div class="section-num">§ 06</div>
+    <h2 class="section-title">Post-Quantum Cryptography</h2>
+    <p>
+      TRISPI uses a <strong>hybrid classical + post-quantum</strong> signature scheme on every block,
+      providing security against both classical and quantum adversaries. No blockchain in production
+      today achieves this standard.
+    </p>
+
+    <h3>6.1 Ed25519 (Classical Layer)</h3>
+    <p>
+      Ed25519 is the Twisted Edwards Curve signature scheme over the Curve25519 field. It provides
+      128-bit classical security and is extremely fast — over 70,000 signatures/second on modern CPUs.
+      Ed25519 signatures are 64 bytes and public keys 32 bytes.
+    </p>
+    <pre>Private key: 32 bytes (random scalar)
+Public key:  32 bytes (point on Ed25519 curve)
+Signature:   64 bytes (R + S values)
+Security:    128-bit classical / 0-bit quantum (Shor-vulnerable)</pre>
+
+    <h3>6.2 Dilithium3 (Quantum Layer)</h3>
+    <p>
+      Dilithium3 is NIST's standardised (FIPS 204 draft) lattice-based digital signature algorithm
+      based on the hardness of the Module Learning With Errors (MLWE) problem. It is designed to
+      resist attacks by quantum computers running Shor's or Grover's algorithms.
+    </p>
+    <pre>Public key:  1,952 bytes
+Private key: 4,000 bytes
+Signature:   3,293 bytes
+Security:    128-bit quantum / 180-bit classical (NIST Level 3)</pre>
+
+    <h3>6.3 Hybrid Block Signing Protocol</h3>
+    <div class="diagram-box">
+      <svg width="100%" height="200" viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="60" width="180" height="80" rx="8" fill="rgba(0,212,255,0.1)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="110" y="93" text-anchor="middle" fill="#00d4ff" font-size="11" font-weight="bold">BLOCK HASH</text>
+        <text x="110" y="110" text-anchor="middle" fill="#94a3b8" font-size="9">SHA-256(block_header)</text>
+        <text x="110" y="127" text-anchor="middle" fill="#94a3b8" font-size="9">32 bytes</text>
+
+        <rect x="260" y="20" width="180" height="70" rx="8" fill="rgba(0,212,255,0.1)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="350" y="51" text-anchor="middle" fill="#00d4ff" font-size="11" font-weight="bold">Ed25519 Sign</text>
+        <text x="350" y="68" text-anchor="middle" fill="#94a3b8" font-size="9">Go node private key</text>
+        <text x="350" y="82" text-anchor="middle" fill="#94a3b8" font-size="9">64 bytes → block</text>
+
+        <rect x="260" y="110" width="180" height="70" rx="8" fill="rgba(16,185,129,0.1)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="350" y="141" text-anchor="middle" fill="#10b981" font-size="11" font-weight="bold">Dilithium3 Sign</text>
+        <text x="350" y="158" text-anchor="middle" fill="#94a3b8" font-size="9">Rust bridge :6000</text>
+        <text x="350" y="172" text-anchor="middle" fill="#94a3b8" font-size="9">3,293 bytes → block</text>
+
+        <rect x="500" y="60" width="180" height="80" rx="8" fill="rgba(245,158,11,0.1)" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="590" y="93" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="bold">SIGNED BLOCK</text>
+        <text x="590" y="110" text-anchor="middle" fill="#94a3b8" font-size="9">Ed25519 + Dilithium3</text>
+        <text x="590" y="127" text-anchor="middle" fill="#94a3b8" font-size="9">Dual-verified by peers</text>
+
+        <line x1="200" y1="90" x2="258" y2="60" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="200" y1="110" x2="258" y2="140" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="440" y1="55" x2="498" y2="90" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="440" y1="145" x2="498" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a3)"/>
+        <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker></defs>
+      </svg>
+      <p class="caption">Figure 4 — Hybrid block signing: Ed25519 (classical, fast) + Dilithium3 (quantum-safe). Both signatures are verified by receiving peers.</p>
+    </div>
+
+    <h3>6.4 Wallet Address Derivation</h3>
+    <p>TRISPI wallet addresses are derived from BIP39 mnemonics using a TRISPI-specific quantum derivation:</p>
+    <pre>seed         = PBKDF2-HMAC-SHA512(mnemonic, "mnemonic", 2048)
+combined     = seed + path_bytes("m/44'/888'/0'/0/0")
+quantum_priv = SHA256(HMAC-SHA512("TRISPI quantum", combined)[:32])
+quantum_pub  = Ed25519.getPublicKey(quantum_priv)
+trp_address  = "trp1" + SHA256(quantum_pub).hex()[:38]</pre>
+    <p>
+      All wallets are compatible with both the TRISPI native chain and the EVM-compatible layer.
+      EVM addresses are derived from the same seed using standard BIP44 path m/44'/60'/0'/0/0.
+    </p>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 7. TOKENOMICS -->
+  <div class="section" id="tokenomics">
+    <div class="section-num">§ 07</div>
+    <h2 class="section-title">Token Economics (TRP)</h2>
+
+    <div class="metrics">
+      <div class="metric"><div class="val">50M</div><div class="lbl">Genesis Supply</div><div class="sub">TRP at block 0</div></div>
+      <div class="metric"><div class="val">500K</div><div class="lbl">Halving Interval</div><div class="sub">blocks per epoch</div></div>
+      <div class="metric"><div class="val">10 TRP</div><div class="lbl">Initial Block Reward</div><div class="sub">halves each epoch</div></div>
+      <div class="metric"><div class="val">70%</div><div class="lbl">Fee Burn Rate</div><div class="sub">of each tx fee</div></div>
+      <div class="metric"><div class="val">30%</div><div class="lbl">Validator Tip</div><div class="sub">of each tx fee</div></div>
+      <div class="metric"><div class="val">888</div><div class="lbl">Coin Type</div><div class="sub">BIP44 path</div></div>
+    </div>
+
+    <h3>7.1 Genesis Allocation</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Category</th><th>Amount (TRP)</th><th>%</th><th>Vesting</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Team & Core Contributors</strong></td><td>30,000,000</td><td>60%</td><td>Unlocked at genesis</td></tr>
+          <tr><td><strong>Treasury / Ecosystem Reserve</strong></td><td>20,000,000</td><td>40%</td><td>Governed by DAO</td></tr>
+          <tr><td><strong>Total Genesis Supply</strong></td><td><strong>50,000,000</strong></td><td><strong>100%</strong></td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>7.2 Emission Schedule (Halving)</h3>
+    <p>
+      Block rewards halve every 500,000 blocks (~8.3 years at a 15-second block time),
+      mirroring Bitcoin's scarcity model but combined with TRISPI's AI-weighted distribution:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Epoch</th><th>Block Range</th><th>Block Reward</th><th>Annual Issuance</th><th>~Year</th></tr></thead>
+        <tbody>
+          <tr><td>0 (Genesis)</td><td>1 – 500,000</td><td>10 TRP</td><td>~2,102,400 TRP</td><td>2026</td></tr>
+          <tr><td>1</td><td>500,001 – 1,000,000</td><td>5 TRP</td><td>~1,051,200 TRP</td><td>2034</td></tr>
+          <tr><td>2</td><td>1,000,001 – 1,500,000</td><td>2.5 TRP</td><td>~525,600 TRP</td><td>2043</td></tr>
+          <tr><td>3</td><td>1,500,001 – 2,000,000</td><td>1.25 TRP</td><td>~262,800 TRP</td><td>2051</td></tr>
+          <tr><td>∞</td><td>2,000,001+</td><td>→ 0.001 TRP min</td><td>Tail emission</td><td>2060+</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>7.3 EIP-1559 Burn Mechanism</h3>
+    <p>
+      Every transaction on TRISPI pays a base fee determined dynamically by the network's
+      congestion level (EIP-1559 algorithm). Of this fee:
+    </p>
+    <ul>
+      <li><strong>70% is burned</strong> — permanently removed from circulation, making TRP deflationary under load</li>
+      <li><strong>30% is credited</strong> to the current block's validator as a priority tip</li>
+    </ul>
+
+    <div class="diagram-box">
+      <svg width="100%" height="180" viewBox="0 0 660 180" xmlns="http://www.w3.org/2000/svg">
+        <!-- TX Fee box -->
+        <rect x="20" y="60" width="140" height="60" rx="8" fill="rgba(245,158,11,0.15)" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="90" y="88" text-anchor="middle" fill="#f59e0b" font-size="12" font-weight="bold">TX FEE</text>
+        <text x="90" y="106" text-anchor="middle" fill="#94a3b8" font-size="10">base_fee × gas_used</text>
+
+        <!-- 70% burn -->
+        <rect x="240" y="20" width="160" height="60" rx="8" fill="rgba(239,68,68,0.15)" stroke="#ef4444" stroke-width="1.5"/>
+        <text x="320" y="48" text-anchor="middle" fill="#ef4444" font-size="12" font-weight="bold">🔥 BURN — 70%</text>
+        <text x="320" y="67" text-anchor="middle" fill="#94a3b8" font-size="10">removed from supply</text>
+
+        <!-- 30% tip -->
+        <rect x="240" y="100" width="160" height="60" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="320" y="128" text-anchor="middle" fill="#10b981" font-size="12" font-weight="bold">💰 TIP — 30%</text>
+        <text x="320" y="147" text-anchor="middle" fill="#94a3b8" font-size="10">validator incentive</text>
+
+        <!-- Effect -->
+        <rect x="480" y="50" width="160" height="80" rx="8" fill="rgba(0,212,255,0.1)" stroke="#00d4ff" stroke-width="1.5"/>
+        <text x="560" y="80" text-anchor="middle" fill="#00d4ff" font-size="11" font-weight="bold">DEFLATION</text>
+        <text x="560" y="98" text-anchor="middle" fill="#94a3b8" font-size="9">High activity →</text>
+        <text x="560" y="112" text-anchor="middle" fill="#94a3b8" font-size="9">burns exceed rewards →</text>
+        <text x="560" y="126" text-anchor="middle" fill="#94a3b8" font-size="9">supply shrinks</text>
+
+        <line x1="160" y1="80" x2="238" y2="50" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="160" y1="100" x2="238" y2="130" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="400" y1="50" x2="478" y2="80" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="400" y1="130" x2="478" y2="100" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#a4)"/>
+        <defs><marker id="a4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/></marker></defs>
+      </svg>
+      <p class="caption">Figure 5 — EIP-1559 fee split: 70% burned deflationary pressure, 30% validator tip</p>
+    </div>
+
+    <h3>7.4 Dynamic Supply Model</h3>
+    <pre>current_supply(t) = GENESIS_SUPPLY + Σ block_rewards(0..t) − Σ burned_fees(0..t)
+
+Where:
+  block_reward(epoch) = 10 / 2^epoch   (halving)
+  burned_fee(tx)      = base_fee × 0.70</pre>
+
+    <h3>7.5 Deflationary Inflection Point</h3>
+    <p>
+      As the network grows and transaction volume increases, the burn rate from fees will
+      eventually exceed new issuance from block rewards. This <em>deflationary inflection point</em>
+      makes TRP a net-deflationary asset above a critical daily transaction volume threshold —
+      analogous to Ethereum's EIP-1559 "ultrasound money" model, but combined with a Bitcoin-style
+      hard supply ceiling from halving.
+    </p>
+
+    <div class="callout green">
+      <p><strong>Key insight:</strong> TRISPI achieves the best of both Bitcoin (hard cap via halving) and
+      Ethereum (dynamic burns via EIP-1559), creating a token that is both scarce and deflationary
+      in high-activity conditions.</p>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 8. AI -->
+  <div class="section" id="ai">
+    <div class="section-num">§ 08</div>
+    <h2 class="section-title">AI Integration Layer</h2>
+    <p>
+      TRISPI's AI layer is not a marketing label — it is functional infrastructure integrated into
+      consensus, security, and gas pricing. The AI components run in the Python service and
+      provide real-time analysis and scoring for all network participants.
+    </p>
+
+    <h3>8.1 Network Intelligence Components</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Module</th><th>Function</th><th>Algorithm</th></tr></thead>
+        <tbody>
+          <tr><td><strong>AI Protector</strong></td><td>Detects Byzantine and Sybil attack patterns</td><td>Anomaly detection on validator behaviour</td></tr>
+          <tr><td><strong>Trust Registry</strong></td><td>Maintains reputational scores for all nodes</td><td>Exponential Moving Average (EMA)</td></tr>
+          <tr><td><strong>PoI Engine</strong></td><td>Computes multi-factor validator scores</td><td>Weighted linear combination (NumPy)</td></tr>
+          <tr><td><strong>Gas Optimizer</strong></td><td>Predicts optimal base fee and priority tip</td><td>EIP-1559 target-block-utilisation algorithm</td></tr>
+          <tr><td><strong>Contract Auditor</strong></td><td>Static analysis of smart contracts before deploy</td><td>Pattern matching + heuristic scoring</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>8.2 Anti-Poisoning Protection</h3>
+    <p>
+      The AI layer includes Byzantine Fault Tolerant (BFT) data validation. Before a validator's
+      data contributes to the network state, it is cross-referenced against a quorum of other
+      validators. Data that deviates more than two standard deviations from the quorum median
+      is flagged and quarantined, protecting against model-poisoning attacks in federated
+      AI training scenarios.
+    </p>
+
+    <h3>8.3 AI Miner Fleet</h3>
+    <p>
+      TRISPI simulates a realistic decentralised network through a fleet of 1,000+ AI-managed
+      miner nodes distributed across 10 geographic regions. Each miner has a randomised role,
+      performance profile, and uptime characteristic, enabling realistic network simulation
+      for protocol development and testing.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Region</th><th>Miners</th><th>Role Distribution</th></tr></thead>
+        <tbody>
+          <tr><td>US-East / US-West</td><td>200</td><td>ai_node: 25%, compute: 65%, validator: 6%, full_node: 4%</td></tr>
+          <tr><td>EU-West / EU-East</td><td>200</td><td>ai_node: 24%, compute: 67%, validator: 5%, full_node: 4%</td></tr>
+          <tr><td>Asia-Pacific / Asia-South</td><td>200</td><td>ai_node: 23%, compute: 68%, validator: 5%, full_node: 4%</td></tr>
+          <tr><td>South America / Africa</td><td>200</td><td>ai_node: 22%, compute: 70%, validator: 4%, full_node: 4%</td></tr>
+          <tr><td>Middle East / Oceania</td><td>200</td><td>ai_node: 20%, compute: 72%, validator: 4%, full_node: 4%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── 9. SMART CONTRACTS -->
+  <div class="section" id="smart-contracts">
+    <div class="section-num">§ 09</div>
+    <h2 class="section-title">Smart Contract Engine</h2>
+    <p>
+      TRISPI supports three contract execution environments, enabling developers to choose
+      the best tool for their use case:
+    </p>
+
+    <h3>9.1 EVM Compatibility Layer</h3>
+    <p>
+      The Rust bridge includes an EVM adapter that makes TRISPI fully compatible with Ethereum
+      tooling: Solidity contracts, MetaMask wallet, Hardhat/Foundry deployment, and all standard
+      ERC-20/721/1155 token standards. Developers can port Ethereum dApps to TRISPI without
+      rewriting a single line of Solidity.
+    </p>
+
+    <h3>9.2 WASM Virtual Machine</h3>
+    <p>
+      For high-performance contracts, TRISPI provides a WebAssembly (WASM) VM executed by the
+      Rust Wasmtime runtime. WASM contracts can be written in any language that compiles to WASM
+      (Rust, Go, C, AssemblyScript) and execute at near-native speed with deterministic gas metering.
+    </p>
+
+    <h3>9.3 Hybrid Bridge</h3>
+    <p>
+      A unique bridge layer allows EVM contracts and WASM contracts to call each other via a
+      standardised cross-VM message passing protocol. This enables developers to write
+      performance-sensitive components in WASM while maintaining full EVM compatibility for
+      wallet and DEX integration.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Feature</th><th>EVM Layer</th><th>WASM VM</th></tr></thead>
+        <tbody>
+          <tr><td>Languages</td><td>Solidity, Vyper</td><td>Rust, Go, C, AssemblyScript</td></tr>
+          <tr><td>Tooling</td><td>Hardhat, Foundry, MetaMask</td><td>Cargo, wasm-pack</td></tr>
+          <tr><td>Performance</td><td>Moderate (interpreted)</td><td>High (near-native)</td></tr>
+          <tr><td>Gas model</td><td>Ethereum-compatible</td><td>WASM instruction metering</td></tr>
+          <tr><td>Quantum safety</td><td>Classical (inherits EVM)</td><td>Dilithium3 supported</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 10. P2P -->
+  <div class="section" id="p2p">
+    <div class="section-num">§ 10</div>
+    <h2 class="section-title">P2P Network Protocol</h2>
+    <p>
+      TRISPI's peer-to-peer layer is built on <strong>libp2p</strong> — the same networking stack
+      used by Ethereum 2.0, IPFS, Filecoin, and Polkadot. This provides battle-tested,
+      high-performance peer discovery and block propagation.
+    </p>
+
+    <h3>10.1 Transport Protocols</h3>
+    <ul>
+      <li><strong>TCP/IP</strong> — reliable transport for block and transaction propagation (port 50052)</li>
+      <li><strong>QUIC</strong> — low-latency UDP-based transport for real-time consensus messages</li>
+      <li><strong>mDNS</strong> — automatic local network peer discovery (no bootstrap required on LAN)</li>
+      <li><strong>DHT (Kademlia)</strong> — global decentralised peer discovery via IPFS bootstrap nodes</li>
+    </ul>
+
+    <h3>10.2 Block Propagation</h3>
+    <p>
+      When a block is mined, it is gossiped to all connected peers within one RTT. Each peer
+      independently verifies:
+    </p>
+    <ol>
+      <li>Block hash meets target difficulty (leading zeros)</li>
+      <li>Ed25519 signature valid against proposer's registered public key</li>
+      <li>Dilithium3 signature valid (quantum layer)</li>
+      <li>AI score of proposer meets minimum threshold</li>
+      <li>All transactions are valid (no double-spends, sufficient balances)</li>
+    </ol>
+
+    <h3>10.3 PBFT Finality</h3>
+    <p>
+      After block propagation, TRISPI applies Practical Byzantine Fault Tolerance (PBFT) to
+      achieve fast, deterministic finality. A block is considered <em>final</em> when at least
+      2/3 of active validators have sent a signed COMMIT message:
+    </p>
+    <pre>Finality requires: ⌊(2 × n) / 3⌋ + 1 COMMIT messages
+  where n = number of active validators
+
+Example: 10 validators → 7 COMMITs required for finality
+         31 validators → 21 COMMITs required for finality</pre>
+    <p>
+      This Byzantine fault tolerance guarantees safety as long as fewer than 1/3 of validators
+      are malicious or offline simultaneously.
+    </p>
+  </div>
+
+  <!-- ─────────────────────────────────────────── 11. GOVERNANCE -->
+  <div class="section" id="governance">
+    <div class="section-num">§ 11</div>
+    <h2 class="section-title">Decentralised Governance</h2>
+    <p>
+      TRISPI uses a <strong>DualGov</strong> governance system that combines on-chain token-weighted
+      voting with AI-mediated proposal analysis to prevent plutocratic capture and low-quality proposals.
+    </p>
+
+    <h3>11.1 Proposal Lifecycle</h3>
+    <div class="roadmap">
+      <div class="rm-item">
+        <div class="rm-dot done">1</div>
+        <div class="rm-content">
+          <h4>Submission</h4>
+          <p>Any account holding ≥ 100 TRP may submit a governance proposal with a description, code changes (if applicable), and rationale. A 10 TRP submission bond is required (returned if proposal passes, burned if rejected).</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot done">2</div>
+        <div class="rm-content">
+          <h4>AI Pre-screening</h4>
+          <p>The AI Contract Auditor and Trust Registry assess the proposal for spam indicators, duplicate detection, and technical soundness. Proposals scoring below 0.40 are auto-rejected before voting.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot done">3</div>
+        <div class="rm-content">
+          <h4>Voting Period (7 days)</h4>
+          <p>Token holders vote YES / NO / ABSTAIN. Voting power = TRP balance × PoI score (preventing pure plutocracy — high AI-score validators have amplified votes).</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot active">4</div>
+        <div class="rm-content">
+          <h4>Quorum Check</h4>
+          <p>Proposal passes if: (1) ≥ 33% of circulating supply participates, (2) ≥ 60% of votes are YES, (3) AI pre-screening score ≥ 0.60.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot future">5</div>
+        <div class="rm-content">
+          <h4>Execution</h4>
+          <p>Passed proposals enter a 48-hour timelock before execution. During timelock, security review and emergency veto by the validator set (supermajority of 80%) is possible.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>11.2 Treasury Governance</h3>
+    <p>
+      The 20,000,000 TRP Treasury allocation is governed exclusively through DualGov proposals.
+      No individual or team can unilaterally access treasury funds. All treasury disbursements
+      are on-chain, auditable, and subject to the full governance lifecycle.
+    </p>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 12. SECURITY -->
+  <div class="section" id="security">
+    <div class="section-num">§ 12</div>
+    <h2 class="section-title">Security Model</h2>
+
+    <h3>12.1 Threat Model</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Threat</th><th>Mitigation</th><th>Residual Risk</th></tr></thead>
+        <tbody>
+          <tr><td>51% attack (hash rate)</td><td>PoI — no hash-rate advantage</td><td>None (PoI not hash-based)</td></tr>
+          <tr><td>Long-range attack</td><td>PBFT finality — blocks final after 2/3 COMMIT</td><td>Low (requires 1/3 validator collusion)</td></tr>
+          <tr><td>Sybil attack</td><td>Staking bond + AI reputation required</td><td>Low (cost prohibitive)</td></tr>
+          <tr><td>Quantum cryptanalysis</td><td>Dilithium3 on all blocks; Ed25519 as fallback</td><td>Minimal (NIST Level 3)</td></tr>
+          <tr><td>Eclipse attack</td><td>libp2p DHT + mDNS multi-path discovery</td><td>Low</td></tr>
+          <tr><td>Smart contract exploits</td><td>AI Contract Auditor + formal verification</td><td>Moderate (user vigilance required)</td></tr>
+          <tr><td>Private key theft</td><td>BIP39 hardware wallet support; no key in cleartext</td><td>Low (depends on user security)</td></tr>
+          <tr><td>Governance attack</td><td>AI pre-screening + quorum + AI-weighted votes</td><td>Low</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>12.2 Key Security Properties</h3>
+    <ul>
+      <li><strong>Liveness:</strong> Network continues to produce blocks as long as &gt; 2/3 of validators are online and honest.</li>
+      <li><strong>Safety:</strong> Two conflicting blocks cannot both be finalised if &lt; 1/3 of validators are Byzantine.</li>
+      <li><strong>Quantum safety:</strong> Dilithium3 provides 128-bit post-quantum security per NIST PQC standardisation.</li>
+      <li><strong>Confidentiality:</strong> Transactions are public by default (transparent ledger). Private transactions via zero-knowledge proofs are planned for v2.0.</li>
+      <li><strong>Non-repudiation:</strong> Dual signature (Ed25519 + Dilithium3) makes it computationally infeasible to deny authorship of any block.</li>
+    </ul>
+
+    <h3>12.3 Validator Whitelisting</h3>
+    <p>
+      During the genesis phase (first 100,000 blocks), the validator set is whitelisted to prevent
+      Sybil attacks during bootstrapping. After the bootstrapping phase ends, any address meeting
+      the minimum stake requirement and AI score threshold may join as a validator permissionlessly.
+    </p>
+  </div>
+
+  <!-- ─────────────────────────────────────────── 13. WEB4 -->
+  <div class="section" id="web4">
+    <div class="section-num">§ 13</div>
+    <h2 class="section-title">Web4 Vision</h2>
+    <p>
+      TRISPI defines Web4 as the convergence of <strong>autonomous AI agents</strong>,
+      <strong>decentralised infrastructure</strong>, and <strong>quantum-safe cryptography</strong>
+      into a self-governing, intelligent digital economy.
+    </p>
+
+    <div class="diagram-box">
+      <svg width="100%" height="240" viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="350" cy="120" r="80" fill="rgba(0,212,255,0.1)" stroke="#00d4ff" stroke-width="2"/>
+        <text x="350" y="115" text-anchor="middle" fill="#00d4ff" font-size="14" font-weight="bold">TRISPI</text>
+        <text x="350" y="133" text-anchor="middle" fill="#00d4ff" font-size="10">Web4 Core</text>
+        <!-- Pillars -->
+        <rect x="10" y="30" width="160" height="60" rx="8" fill="rgba(124,58,237,0.1)" stroke="#7c3aed" stroke-width="1.5"/>
+        <text x="90" y="57" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="bold">AI Autonomy</text>
+        <text x="90" y="74" text-anchor="middle" fill="#94a3b8" font-size="9">Self-governing smart</text>
+        <text x="90" y="86" text-anchor="middle" fill="#94a3b8" font-size="9">contracts + AI agents</text>
+
+        <rect x="10" y="150" width="160" height="60" rx="8" fill="rgba(16,185,129,0.1)" stroke="#10b981" stroke-width="1.5"/>
+        <text x="90" y="177" text-anchor="middle" fill="#10b981" font-size="11" font-weight="bold">Quantum Safety</text>
+        <text x="90" y="194" text-anchor="middle" fill="#94a3b8" font-size="9">Dilithium3 — future-proof</text>
+        <text x="90" y="206" text-anchor="middle" fill="#94a3b8" font-size="9">post-quantum security</text>
+
+        <rect x="530" y="30" width="160" height="60" rx="8" fill="rgba(245,158,11,0.1)" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="610" y="57" text-anchor="middle" fill="#f59e0b" font-size="11" font-weight="bold">Decentralisation</text>
+        <text x="610" y="74" text-anchor="middle" fill="#94a3b8" font-size="9">1,000+ miners across</text>
+        <text x="610" y="86" text-anchor="middle" fill="#94a3b8" font-size="9">10 global regions</text>
+
+        <rect x="530" y="150" width="160" height="60" rx="8" fill="rgba(239,68,68,0.1)" stroke="#ef4444" stroke-width="1.5"/>
+        <text x="610" y="177" text-anchor="middle" fill="#ef4444" font-size="11" font-weight="bold">Merit Economy</text>
+        <text x="610" y="194" text-anchor="middle" fill="#94a3b8" font-size="9">PoI rewards contribution</text>
+        <text x="610" y="206" text-anchor="middle" fill="#94a3b8" font-size="9">not capital alone</text>
+
+        <line x1="170" y1="60" x2="270" y2="100" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4"/>
+        <line x1="170" y1="180" x2="270" y2="140" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4"/>
+        <line x1="530" y1="60" x2="430" y2="100" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4"/>
+        <line x1="530" y1="180" x2="430" y2="140" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4"/>
+      </svg>
+      <p class="caption">Figure 6 — TRISPI Web4 Vision: convergence of AI Autonomy, Quantum Safety, Decentralisation, and Merit Economy</p>
+    </div>
+
+    <h3>13.1 Autonomous AI Agents</h3>
+    <p>
+      TRISPI is designed as infrastructure for AI agents that need to transact, coordinate, and
+      build reputation autonomously. An AI agent can hold a TRP wallet, pay gas for compute
+      resources, earn reputation through reliable task completion, and participate in governance —
+      all without human intervention.
+    </p>
+
+    <h3>13.2 Decentralised AI Training</h3>
+    <p>
+      TRISPI's proof-of-computation model enables a marketplace for decentralised AI training:
+      nodes contribute GPU cycles, earn TRP proportional to their verified contribution, and
+      the AI Protector ensures training data quality through Byzantine-resistant aggregation.
+    </p>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 14. ROADMAP -->
+  <div class="section" id="roadmap">
+    <div class="section-num">§ 14</div>
+    <h2 class="section-title">Development Roadmap</h2>
+
+    <div class="roadmap">
+      <div class="rm-item">
+        <div class="rm-dot done">Q1 '26</div>
+        <div class="rm-content">
+          <h4>Genesis Infrastructure ✓</h4>
+          <p>Three-layer architecture (Python + Go + Rust), BIP39 wallets, Ed25519 signing, basic PoI scoring, EIP-1559 fee model, blockchain persistence, explorer UI, tokenomics dashboard.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot done">Q2 '26</div>
+        <div class="rm-content">
+          <h4>Quantum Security + Real Consensus ✓ (in progress)</h4>
+          <p>Dilithium3 hybrid signatures on all blocks, real AI score computation with NumPy PoI engine, real token burn enforcement on-chain, real validator pubkey cross-verification, Ed25519 block authentication.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot active">Q3 '26</div>
+        <div class="rm-content">
+          <h4>Mainnet Beta Launch</h4>
+          <p>Replace simulated miner fleet with real validator nodes, open public validator registration, real transaction fee burns, wallet UI with hardware wallet support (Ledger/Trezor), MetaMask EVM integration.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot future">Q4 '26</div>
+        <div class="rm-content">
+          <h4>Smart Contract Ecosystem</h4>
+          <p>EVM Solidity tooling documentation, WASM contract SDK, native DEX (automated market maker), NFT standard (TRC-721), cross-chain bridge to Ethereum mainnet.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot future">Q1 '27</div>
+        <div class="rm-content">
+          <h4>AI Marketplace</h4>
+          <p>Decentralised AI compute marketplace, model training proof-of-computation, AI agent SDK, automated governance assistant, reputation-based credit system.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot future">Q2 '27</div>
+        <div class="rm-content">
+          <h4>Privacy Layer</h4>
+          <p>Zero-knowledge proof integration (Groth16 / PLONK), optional private transactions, ZK-based identity verification for governance, quantum-safe ZK proof system research.</p>
+        </div>
+      </div>
+      <div class="rm-item">
+        <div class="rm-dot future">2028+</div>
+        <div class="rm-content">
+          <h4>Full Web4 Deployment</h4>
+          <p>Complete quantum-safe cryptography migration, full autonomous AI agent ecosystem, cross-chain interoperability with all major L1 networks, mobile wallet, institutional custody solutions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── 15. SPECS -->
+  <div class="section" id="specs">
+    <div class="section-num">§ 15</div>
+    <h2 class="section-title">Technical Specifications</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Parameter</th><th>Value</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Chain ID</td><td>7878</td><td>EVM-compatible chain identifier</td></tr>
+          <tr><td>Native Token</td><td>TRP</td><td>TRISPI</td></tr>
+          <tr><td>BIP44 Coin Type</td><td>888</td><td>m/44'/888'/0'/0/0</td></tr>
+          <tr><td>Target Block Time</td><td>15 seconds</td><td>Adjustable via governance</td></tr>
+          <tr><td>Max Block Gas</td><td>30,000,000</td><td>Ethereum-compatible</td></tr>
+          <tr><td>Min Validator Stake</td><td>1,000 TRP</td><td>Slashable bond</td></tr>
+          <tr><td>Min AI Score</td><td>0.60</td><td>Below this: ejected from validator set</td></tr>
+          <tr><td>Block Reward (epoch 0)</td><td>10 TRP</td><td>Halves every 500,000 blocks</td></tr>
+          <tr><td>Burn Rate</td><td>70%</td><td>Of EIP-1559 base fee</td></tr>
+          <tr><td>Validator Tip</td><td>30%</td><td>Of EIP-1559 base fee</td></tr>
+          <tr><td>PBFT Fault Tolerance</td><td>f &lt; n/3</td><td>Byzantine validators tolerated</td></tr>
+          <tr><td>Genesis Supply</td><td>50,000,000 TRP</td><td>Fixed; no pre-mine inflation</td></tr>
+          <tr><td>Signature Scheme</td><td>Ed25519 + Dilithium3</td><td>Hybrid classical + PQC</td></tr>
+          <tr><td>Hash Function</td><td>SHA-256</td><td>For block hash and address derivation</td></tr>
+          <tr><td>P2P Protocol</td><td>libp2p (TCP + QUIC)</td><td>mDNS + DHT discovery</td></tr>
+          <tr><td>Smart Contracts</td><td>EVM (Solidity) + WASM</td><td>Hybrid bridge supported</td></tr>
+          <tr><td>API</td><td>REST + GraphQL</td><td>Port 8000 (Python service)</td></tr>
+          <tr><td>Consensus Port</td><td>8084</td><td>Go consensus node HTTP API</td></tr>
+          <tr><td>PQC Bridge Port</td><td>6000</td><td>Rust Dilithium3 signing service</td></tr>
+          <tr><td>Governance Quorum</td><td>33%</td><td>Of circulating supply</td></tr>
+          <tr><td>Governance Supermajority</td><td>60%</td><td>YES votes required</td></tr>
+          <tr><td>Proposal Bond</td><td>10 TRP</td><td>Burned if rejected</td></tr>
+          <tr><td>Voting Period</td><td>7 days</td><td>On-chain blocks</td></tr>
+          <tr><td>Timelock</td><td>48 hours</td><td>Before proposal execution</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>15.1 API Reference Summary</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/tokenomics</code></td><td>GET</td><td>Full token economics state</td></tr>
+          <tr><td><code>/api/network/status</code></td><td>GET</td><td>Live network stats (peers, TPS, block height)</td></tr>
+          <tr><td><code>/api/explorer/blocks</code></td><td>GET</td><td>Recent blocks with signatures</td></tr>
+          <tr><td><code>/api/balance/{address}</code></td><td>GET</td><td>TRP balance for any address</td></tr>
+          <tr><td><code>/api/transfer</code></td><td>POST</td><td>Signed token transfer</td></tr>
+          <tr><td><code>/api/wallet/create</code></td><td>POST</td><td>BIP39 mnemonic wallet generation</td></tr>
+          <tr><td><code>/api/pqc/status</code></td><td>GET</td><td>Post-quantum cryptography status</td></tr>
+          <tr><td><code>/graphql</code></td><td>GET/POST</td><td>GraphQL API for rich queries</td></tr>
+          <tr><td><code>/api/governance/proposals</code></td><td>GET</td><td>Active governance proposals</td></tr>
+          <tr><td><code>/api/fleet/stats</code></td><td>GET</td><td>Miner fleet statistics</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- ─────────────────────────────────────────── 16. CONCLUSION -->
+  <div class="section" id="conclusion">
+    <div class="section-num">§ 16</div>
+    <h2 class="section-title">Conclusion</h2>
+    <p>
+      TRISPI represents a fundamental rethinking of what a blockchain network can be. By unifying
+      artificial intelligence, post-quantum cryptography, and a fair merit-based consensus mechanism
+      into a single coherent protocol, TRISPI addresses the three most critical challenges facing
+      blockchain networks today: energy waste, unfair power concentration, and quantum vulnerability.
+    </p>
+    <p>
+      The Proof of Intelligence consensus mechanism ensures that network power flows to those who
+      contribute most reliably and intelligently — not to those with the most hardware or capital.
+      The hybrid Ed25519 + Dilithium3 signature scheme ensures that all cryptographic commitments
+      remain secure even as quantum computing matures. And the dynamic EIP-1559 + halving token
+      model ensures TRP becomes scarcer over time while network activity is rewarded with
+      proportionally lower fees.
+    </p>
+    <p>
+      TRISPI is not just a blockchain — it is a platform for the intelligent, quantum-safe,
+      decentralised economy of Web4.
+    </p>
+
+    <div class="callout green">
+      <p>
+        <strong>Get involved:</strong> Validators, developers, and researchers are invited to join the
+        TRISPI network. Run a validator node, contribute to the open-source codebase, or build
+        dApps on the most advanced consensus platform in the Web4 ecosystem.
+      </p>
+    </div>
+
+    <div class="metrics" style="margin-top:40px">
+      <div class="metric"><div class="val">4,700+</div><div class="lbl">Blocks Mined</div><div class="sub">and growing</div></div>
+      <div class="metric"><div class="val">1,000+</div><div class="lbl">Active Nodes</div><div class="sub">10 regions</div></div>
+      <div class="metric"><div class="val">128-bit</div><div class="lbl">Quantum Security</div><div class="sub">Dilithium3 NIST L3</div></div>
+      <div class="metric"><div class="val">50M TRP</div><div class="lbl">Genesis Supply</div><div class="sub">deflationary model</div></div>
+    </div>
+
+    <h3>References & Standards</h3>
+    <ul>
+      <li>NIST FIPS 204 — Module-Lattice-Based Digital Signature Standard (Dilithium3)</li>
+      <li>NIST FIPS 186-5 — Digital Signature Standard (Ed25519)</li>
+      <li>BIP39 — Mnemonic code for generating deterministic keys</li>
+      <li>BIP44 — Multi-Account Hierarchy for Deterministic Wallets</li>
+      <li>EIP-1559 — Fee market change for ETH 1.0 chain</li>
+      <li>libp2p — Modular peer-to-peer networking framework</li>
+      <li>PBFT — Practical Byzantine Fault Tolerance (Castro & Liskov, 1999)</li>
+      <li>Satoshi Nakamoto — Bitcoin: A Peer-to-Peer Electronic Cash System (2008)</li>
+      <li>Vitalik Buterin et al. — Ethereum Yellow Paper</li>
+      <li>CRYSTALS-Dilithium — Algorithm Specifications and Supporting Documentation</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ FOOTER -->
+<footer>
+  <div class="container">
+    <p style="margin-bottom:8px">
+      <strong>TRISPI AI-Powered Web4 Blockchain Network</strong>
+    </p>
+    <p style="margin-bottom:16px">
+      Technical Whitepaper v1.0 · April 2026 · Chain ID 7878
+    </p>
+    <p>
+      This document is provided for informational purposes only. Nothing herein constitutes
+      financial, legal, or investment advice. The TRP token is a utility token for network
+      participation and governance. Always conduct your own research.
+    </p>
+    <p style="margin-top:16px;font-size:.78rem;opacity:.6">
+      © 2026 TRISPI Network. Open-source under MIT License.
+      GitHub: <a href="https://github.com/TRISPIAINETWORK/TRISPI">github.com/TRISPIAINETWORK/TRISPI</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

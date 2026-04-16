@@ -1,0 +1,27 @@
+{
+  "name": "@trispi/sdk",
+  "version": "1.1.0",
+  "description": "TRISPI AI Blockchain SDK — TypeScript client for Web4",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "echo 'Run: npx ts-node examples.ts'"
+  },
+  "license": "MIT",
+  "author": "TRISPI AI Network <dev@trispi.org>",
+  "homepage": "https://trispi.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TRISPIAINETWORK/TRISPI"
+  },
+  "keywords": ["trispi", "blockchain", "ai", "web4", "sdk", "trp", "defi"],
+  "dependencies": {
+    "axios": "^1.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

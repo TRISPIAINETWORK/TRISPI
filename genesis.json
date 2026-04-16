@@ -1,0 +1,47 @@
+{
+  "network": "TRISPI Mainnet",
+  "consensus": "PoI+PBFT",
+  "token": {
+    "name": "TRISPI",
+    "symbol": "TRP",
+    "decimals": 18,
+    "genesis_supply": 50000000
+  },
+  "block": {
+    "time_seconds": 3,
+    "max_transactions": 1000,
+    "max_size_bytes": 2097152
+  },
+  "eip1559": {
+    "base_fee_burn_rate": 0.7,
+    "priority_fee_to_providers": 0.3,
+    "min_base_fee": 0.001
+  },
+  "mining": {
+    "block_reward_base": 0.5,
+    "annual_issuance_rate": 0.02,
+    "halving_interval_blocks": 500000
+  },
+  "cryptography": {
+    "classical": "Ed25519",
+    "post_quantum": "Dilithium3",
+    "key_exchange": "Kyber1024"
+  },
+  "consensus_params": {
+    "validators": 21,
+    "quorum": 13,
+    "byzantine_tolerance": 6,
+    "algorithm": "PBFT"
+  },
+  "runtimes": ["EVM", "WASM", "Hybrid"],
+  "ai_systems": [
+    "fraud_detector",
+    "gas_optimizer",
+    "contract_auditor",
+    "network_protector",
+    "trust_scorer",
+    "poi_engine"
+  ],
+  "genesis_timestamp": 1733299200,
+  "version": "1.0.0"
+}

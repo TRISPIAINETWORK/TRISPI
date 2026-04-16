@@ -1,0 +1,47 @@
+version: '3.8'
+
+# TRISPI Network Node - Docker Compose
+# Run: docker-compose -f docker-compose.trispi.yml up -d
+
+services:
+  trispi-node:
+    image: python:3.11-slim
+    container_name: trispi-node
+    ports:
+      - "8001:8001"     # REST API
+      - "8545:8545"     # JSON-RPC (MetaMask compatible)
+      - "8546:8546"     # WebSocket
+      - "30303:30303"   # P2P Network
+    volumes:
+      - trispi-data:/app/chain_data
+    environment:
+      - TRISPI_PORT=8001
+      - TRISPI_P2P_PORT=30303
+      - TRISPI_RPC_PORT=8545
+      - TRISPI_WS_PORT=8546
+      - TRISPI_DATA_DIR=/app/chain_data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  trispi-miner:
+    image: python:3.11-slim
+    container_name: trispi-miner
+    depends_on:
+      - trispi-node
+    environment:
+      - TRISPI_RPC_URL=http://trispi-node:8001
+      - TRISPI_WALLET=${TRISPI_WALLET:-}
+    command: >
+      bash -c "pip install requests psutil &&
+               python /app/miner/trispi_energy_provider.py"
+    volumes:
+      - ./miner:/app/miner:ro
+    restart: unless-stopped
+
+volumes:
+  trispi-data:
+    driver: local

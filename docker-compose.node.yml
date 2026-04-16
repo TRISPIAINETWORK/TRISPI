@@ -1,0 +1,100 @@
+version: '3.8'
+
+# TRISPI Network — Single Node Docker Compose
+# Run your own TRISPI validator or full node.
+#
+# Quick start:
+#   cp .env.example .env   # edit with your settings
+#   docker-compose -f docker-compose.node.yml up -d
+#   docker-compose -f docker-compose.node.yml logs -f
+
+services:
+
+  # ── Rust Core — Post-Quantum Cryptography + EVM + WASM ─────────────────────
+  rust-core:
+    image: ghcr.io/trispiainetwork/trispi-rust-core:latest
+    # Or build locally:
+    # build:
+    #   context: ./rust-core
+    container_name: trispi-rust
+    ports:
+      - "${RUST_PORT:-6000}:6000"
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      - rust-data:/app/data
+    restart: unless-stopped
+    networks:
+      - trispi-node
+
+  # ── Go Consensus — PBFT + libp2p P2P (mDNS + DHT) + Energy Providers ──────
+  go-consensus:
+    image: ghcr.io/trispiainetwork/trispi-go-consensus:latest
+    # Or build locally:
+    # build:
+    #   context: ./go-consensus
+    container_name: trispi-consensus
+    command: [
+      "-id", "${NODE_ID:-node1}",
+      "-http", "8081",
+      "-port", "50051",
+      "-chain", "/app/data/trispi_chain.json"
+    ]
+    ports:
+      - "${CONSENSUS_PORT:-8081}:8081"
+      - "${P2P_PORT:-50051}:50051"
+      - "${LIBP2P_PORT:-50052}:50052"
+    environment:
+      - RUST_CORE_URL=http://rust-core:6000
+    volumes:
+      - consensus-data:/app/data
+    depends_on:
+      - rust-core
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - trispi-node
+
+  # ── Python AI Service — API + Blockchain State + AI + GraphQL ───────────────
+  trispi-node:
+    image: ghcr.io/trispiainetwork/trispi-python:latest
+    # Or build locally:
+    # build:
+    #   context: ./python-ai-service
+    container_name: trispi-python
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - NODE_TYPE=${NODE_TYPE:-validator}
+      - CHAIN_ID=${CHAIN_ID:-7878}
+      - RUST_CORE_URL=http://rust-core:6000
+      - GO_CONSENSUS_URL=http://go-consensus:8081
+      - PRODUCTION=true
+    volumes:
+      - node-data:/app/trispi_state
+    depends_on:
+      go-consensus:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - trispi-node
+
+networks:
+  trispi-node:
+    driver: bridge
+
+volumes:
+  rust-data:
+  consensus-data:
+  node-data:

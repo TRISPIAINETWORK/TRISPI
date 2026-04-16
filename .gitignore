@@ -1,0 +1,42 @@
+# Private keys and secrets
+*.key
+*.pem
+*.secret
+.env
+.env.*
+
+# Node data
+chain_data/
+neonet_state/
+*.json.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node modules
+node_modules/
+.next/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+*.wasm
+target/
