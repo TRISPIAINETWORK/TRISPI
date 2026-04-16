@@ -3568,7 +3568,7 @@ async def api_rust_core_status():
 @app.get("/api/system/hardware")
 async def api_system_hardware():
     """Honest hardware capability report for this node."""
-    import platform
+    import platform, subprocess
     report = {
         "platform": platform.system(),
         "python_version": platform.python_version(),
@@ -3583,14 +3583,12 @@ async def api_system_hardware():
         "compute_mode": "cpu-numpy",
         "ai_engine": "NumPy MLP (always active)",
     }
-    # NumPy
     try:
         import numpy as np
         report["numpy"] = True
         report["numpy_version"] = np.__version__
     except ImportError:
         pass
-    # PyTorch
     try:
         import torch
         report["torch"] = True
@@ -3604,14 +3602,12 @@ async def api_system_hardware():
             report["compute_mode"] = "torch-cpu+numpy"
     except ImportError:
         pass
-    # SciPy
     try:
         import scipy
         report["scipy"] = True
         report["scipy_version"] = scipy.__version__
     except ImportError:
         pass
-    # psutil
     try:
         import psutil
         report["psutil"] = True
@@ -3620,19 +3616,18 @@ async def api_system_hardware():
         mem = psutil.virtual_memory()
         report["ram_gb"] = round(mem.total / 1024**3, 1)
         report["ram_available_gb"] = round(mem.available / 1024**3, 1)
-        report["cpu_freq_mhz"] = round((psutil.cpu_freq().current if psutil.cpu_freq() else 0), 0)
+        freq = psutil.cpu_freq()
+        report["cpu_freq_mhz"] = round(freq.current, 0) if freq else 0
     except ImportError:
         pass
-    # nvidia-smi fallback
-    if not report["cuda"]:
+    if not report["cuda"] and report["gpu_model"] is None:
         try:
-            import subprocess
             result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader,nounits"],
                 capture_output=True, text=True, timeout=3
             )
             if result.returncode == 0:
-                report["gpu_model"] = result.stdout.strip().split(",")[0]
+                report["gpu_model"] = result.stdout.strip().split("\n")[0]
         except Exception:
             pass
     return report
@@ -5790,7 +5785,7 @@ async def ai_energy_register(req: AIEnergyRegister):
     
     ai_energy_stats["total_contributors"] += 1
 
-    # Register in the real provider fleet so it shows up in fleet stats
+    # Register in the real provider fleet so fleet stats reflect this provider
     wallet = getattr(req, 'wallet_address', contributor_id)
     try:
         from miner_fleet import miner_fleet as _fleet
