@@ -940,7 +940,7 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 Dilithium3Sig string  `json:"dilithium3_sig"`
                 Ed25519Pub    string  `json:"ed25519_pub"`
                 Dilithium3Pub string  `json:"dilithium3_pub"`
-                SigVerified   bool    `json:"sig_verified"`
+                TxMsgHex      string  `json:"tx_msg_hex"`
                 PQCEngine     string  `json:"pqc_engine"`
         }
 
@@ -949,11 +949,21 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 return
         }
 
-        // PQC signature validation (fail-closed when signatures are present)
+        // PQC signature validation — fail-closed, no client-trust fallback.
+        // When ed25519_sig + ed25519_pub + tx_msg_hex are present, we MUST verify independently.
+        // Transactions with invalid or missing signatures when sig fields are present are rejected.
         pqcVerified := false
-        pqcNote := "no_signatures_provided"
+        pqcNote := "no_pqc_fields"
 
-        if req.Ed25519Sig != "" && req.Ed25519Pub != "" {
+        if req.Ed25519Sig != "" && req.Ed25519Pub != "" && req.TxMsgHex != "" {
+                // Decode the canonical message bytes (hex-encoded by Python)
+                msgBytes, msgErr := hex.DecodeString(req.TxMsgHex)
+                if msgErr != nil {
+                        http.Error(w, fmt.Sprintf("invalid_tx_msg_hex: %v", msgErr), http.StatusBadRequest)
+                        return
+                }
+
+                // Decode Ed25519 public key and signature
                 sigBytes, sigErr := hex.DecodeString(req.Ed25519Sig)
                 pubBytes, pubErr := hex.DecodeString(req.Ed25519Pub)
                 if sigErr != nil || pubErr != nil {
@@ -961,53 +971,45 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                         return
                 }
                 if len(pubBytes) != ed25519.PublicKeySize {
-                        http.Error(w, "ed25519_public_key_wrong_size", http.StatusBadRequest)
+                        http.Error(w, fmt.Sprintf("ed25519_public_key_wrong_size: got %d want %d", len(pubBytes), ed25519.PublicKeySize), http.StatusBadRequest)
                         return
                 }
-                // Reconstruct the canonical message that Python signed
-                txHash := req.Data
-                if idx := len("hash:"); len(req.Data) > idx {
-                        for _, part := range splitComma(req.Data) {
-                                if len(part) > 5 && part[:5] == "hash:" {
-                                        txHash = part[5:]
-                                }
-                        }
-                }
-                msg := []byte(txHash + ":" + req.From + ":" + req.To + ":" + formatAmount(req.Amount))
+
+                // Independent Ed25519 verification against the canonical message
                 pubKey := ed25519.PublicKey(pubBytes)
-                if !ed25519.Verify(pubKey, msg, sigBytes) {
-                        // Try the full data string as message fallback
-                        if !ed25519.Verify(pubKey, []byte(req.Data), sigBytes) {
-                                // Accept if Python already verified (trust Python's sig_verified flag)
-                                if req.SigVerified {
-                                        pqcVerified = true
-                                        pqcNote = "ed25519_verified_by_python_relay"
-                                } else {
-                                        http.Error(w, "ed25519_signature_invalid", http.StatusBadRequest)
-                                        return
-                                }
-                        } else {
-                                pqcVerified = true
-                                pqcNote = "ed25519_verified"
-                        }
-                } else {
-                        pqcVerified = true
-                        pqcNote = "ed25519_verified"
+                if !ed25519.Verify(pubKey, msgBytes, sigBytes) {
+                        w.Header().Set("Content-Type", "application/json")
+                        w.WriteHeader(http.StatusBadRequest)
+                        json.NewEncoder(w).Encode(map[string]interface{}{
+                                "error":        "ed25519_signature_invalid",
+                                "pqc_verified": false,
+                        })
+                        return
                 }
-                // Dilithium3: verify presence and length (Go stdlib has no dilithium; signature already verified by Python)
+
+                // Dilithium3: validate hex encoding and minimum size
+                // (Go stdlib has no Dilithium3 support; we validate structural integrity)
+                dilNote := "dilithium3_absent"
                 if req.Dilithium3Sig != "" {
                         dilBytes, dilErr := hex.DecodeString(req.Dilithium3Sig)
                         if dilErr != nil {
                                 http.Error(w, "invalid_hex_in_dilithium3_sig", http.StatusBadRequest)
                                 return
                         }
-                        // Dilithium3 signatures are ~3293 bytes; minimum plausible length is 1000 hex chars (500 bytes)
+                        // Dilithium3 signatures are ~3293 bytes; reject implausibly short signatures
                         if len(dilBytes) < 100 {
-                                http.Error(w, "dilithium3_signature_too_short", http.StatusBadRequest)
+                                http.Error(w, fmt.Sprintf("dilithium3_signature_too_short: %d bytes", len(dilBytes)), http.StatusBadRequest)
                                 return
                         }
-                        pqcNote += "+dilithium3_present"
+                        dilNote = fmt.Sprintf("dilithium3_present_%d_bytes", len(dilBytes))
                 }
+
+                pqcVerified = true
+                pqcNote = "ed25519_verified+" + dilNote
+        } else if req.Ed25519Sig != "" || req.Ed25519Pub != "" || req.TxMsgHex != "" {
+                // Partial fields — reject (all three required for verification)
+                http.Error(w, "incomplete_pqc_fields: need ed25519_sig+ed25519_pub+tx_msg_hex", http.StatusBadRequest)
+                return
         }
 
         gasFee := 0.001 + float64(len(req.Data))*0.00001
@@ -1026,24 +1028,6 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 "pqc_note":     pqcNote,
                 "pqc_engine":   req.PQCEngine,
         })
-}
-
-// splitComma splits a comma-separated string
-func splitComma(s string) []string {
-        var parts []string
-        cur := ""
-        for _, c := range s {
-                if c == ',' {
-                        parts = append(parts, cur)
-                        cur = ""
-                } else {
-                        cur += string(c)
-                }
-        }
-        if cur != "" {
-                parts = append(parts, cur)
-        }
-        return parts
 }
 
 // formatAmount formats a float64 to a plain string for message reconstruction
