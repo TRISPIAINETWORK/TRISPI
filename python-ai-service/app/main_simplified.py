@@ -227,26 +227,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         response = await call_next(request)
 
-        # Skip strict headers for RPC endpoint — MetaMask needs open CORS
-        path = request.url.path
-        is_rpc = path in ("/rpc", "/api/rpc") or path.startswith("/rpc")
-
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "no-referrer-when-downgrade"
-
-        if not is_rpc:
-            response.headers["X-Frame-Options"] = "DENY"
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data: https:; "
-                "connect-src 'self' https: wss: ws:; "
-                "font-src 'self' data:; "
-                "object-src 'none'; "
-                "base-uri 'self';"
-            )
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https: wss: ws:; "
+            "font-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self';"
+        )
 
         # Allow cross-origin access (needed for MetaMask + external tools)
         response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
@@ -5446,35 +5440,46 @@ async def send_transaction(req: TransactionRequest):
     _tx_ts = int(time.time())
     tx_hash = hashlib.sha256(f"{sender}{recipient}{amount}{token_symbol}{_tx_ts}".encode()).hexdigest()
 
-    # Sign with Hybrid Ed25519 + Dilithium3 PQC
+    # Fail-closed: TX is rejected if PQC signing is unavailable or fails verification.
     # A per-transaction keypair is generated; public keys are stored with the record
     # so signatures are independently verifiable (forward-secure model).
+    if hybrid_signer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="PQC signing unavailable — hybrid_signer not initialized"
+        )
     _ed25519_sig = ""
     _dilithium3_sig = ""
     _ed25519_pub = ""
     _dilithium3_pub = ""
     _sig_verified = False
     _pqc_engine = "hybrid_ed25519_dilithium3"
-    if hybrid_signer is not None:
-        try:
-            _tx_msg = f"{tx_hash}:{sender}:{recipient}:{amount}:{token_symbol}:{_tx_ts}".encode()
-            _keypair = hybrid_signer.generate_hybrid_keypair()
-            _sigs = hybrid_signer.sign_hybrid(_tx_msg, _keypair)
-            _ed25519_sig = _sigs.get("ed25519_sig", "")
-            _dilithium3_sig = _sigs.get("dilithium3_sig", "")
-            _ed25519_pub = _keypair.get("ed25519", {}).get("public", "")
-            _dilithium3_pub = _keypair.get("dilithium3", {}).get("public", "")
-            # Verify signature round-trip immediately
-            _pub_keys = {
-                "ed25519": {"public": _ed25519_pub},
-                "dilithium3": {"public": _dilithium3_pub},
-            }
-            _verify_result = hybrid_signer.verify_hybrid(_tx_msg, _sigs, _pub_keys)
-            _sig_verified = bool(_verify_result.get("hybrid_valid", False))
-            if not _sig_verified:
-                _pqc_engine = "signature_verification_failed"
-        except Exception as _sig_err:
-            _pqc_engine = f"signing_error:{_sig_err}"
+    try:
+        _tx_msg = f"{tx_hash}:{sender}:{recipient}:{amount}:{token_symbol}:{_tx_ts}".encode()
+        _keypair = hybrid_signer.generate_hybrid_keypair()
+        _sigs = hybrid_signer.sign_hybrid(_tx_msg, _keypair)
+        _ed25519_sig = _sigs.get("ed25519_sig", "")
+        _dilithium3_sig = _sigs.get("dilithium3_sig", "")
+        _ed25519_pub = _keypair.get("ed25519", {}).get("public", "")
+        _dilithium3_pub = _keypair.get("dilithium3", {}).get("public", "")
+        if not _ed25519_sig or not _dilithium3_sig:
+            raise ValueError("sign_hybrid returned empty signature(s)")
+        # Verify signature round-trip — fail-closed
+        _pub_keys = {
+            "ed25519": {"public": _ed25519_pub},
+            "dilithium3": {"public": _dilithium3_pub},
+        }
+        _verify_result = hybrid_signer.verify_hybrid(_tx_msg, _sigs, _pub_keys)
+        _sig_verified = bool(_verify_result.get("hybrid_valid", False))
+        if not _sig_verified:
+            raise ValueError("PQC signature verification failed (hybrid_valid=False)")
+    except HTTPException:
+        raise
+    except Exception as _sig_err:
+        raise HTTPException(
+            status_code=422,
+            detail=f"PQC signing/verification failed — transaction rejected: {_sig_err}"
+        )
 
     # Record transaction in history
     tx_record = {
