@@ -931,13 +931,19 @@ func (n *EnhancedNode) HandleHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 // verifyDilithium3ViaPython calls the Python localhost bridge to verify a Dilithium3 signature.
 // Returns (true, nil) if valid, (false, nil) if invalid, (false, err) if bridge is unreachable.
+// Bridge URL is read from PYTHON_AI_URL env var (default http://127.0.0.1:8000).
 func verifyDilithium3ViaPython(canonicalMsg, sigHex, pubHex string) (bool, error) {
+        pythonBase := os.Getenv("PYTHON_AI_URL")
+        if pythonBase == "" {
+                pythonBase = "http://127.0.0.1:8000"
+        }
+        bridgeURL := strings.TrimRight(pythonBase, "/") + "/api/internal/go/verify-dilithium"
         payload := fmt.Sprintf(
                 `{"message_hex":"%s","signature_hex":"%s","public_key_hex":"%s"}`,
                 hex.EncodeToString([]byte(canonicalMsg)), sigHex, pubHex,
         )
         req, err := http.NewRequest("POST",
-                "http://127.0.0.1:8000/api/internal/go/verify-dilithium",
+                bridgeURL,
                 bytes.NewBufferString(payload),
         )
         if err != nil {
