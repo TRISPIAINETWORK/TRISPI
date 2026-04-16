@@ -5566,11 +5566,13 @@ async def send_transaction(req: TransactionRequest):
                             "to": recipient,
                             "amount": amount,
                             "data": f"token:{token_symbol},hash:{tx_hash}",
+                            "tx_hash": tx_hash,
+                            "token_symbol": token_symbol,
+                            "timestamp": _tx_ts,
                             "ed25519_sig": _ed25519_sig,
                             "dilithium3_sig": _dilithium3_sig,
                             "ed25519_pub": _ed25519_pub,
                             "dilithium3_pub": _dilithium3_pub,
-                            "tx_msg_hex": _tx_msg_hex,
                             "pqc_engine": _pqc_engine,
                         },
                     )
@@ -7595,63 +7597,71 @@ async def security_audit():
         except Exception:
             pass
 
-    # 5. Go block verification — send a real signed tx probe; Go must accept valid sig and reject invalid
+    # 5. Go block verification — send real signed tx probe; Go must accept valid sig and reject invalid.
+    # Go independently reconstructs canonical message from tx fields (no tx_msg_hex trust).
     _go_verification = False
-    _go_verify_note = ""
-    try:
-        import httpx as _hx
-        # Generate a probe keypair and sign a probe message
-        _probe_kp = hybrid_signer.generate_hybrid_keypair() if hybrid_signer else None
-        if _probe_kp:
-            _probe_msg = b"go_audit_probe"
+    _go_verify_note = "hybrid_signer_missing"
+    if hybrid_signer is not None:
+        try:
+            import httpx as _hx
+            # Generate probe keypair
+            _probe_kp = hybrid_signer.generate_hybrid_keypair()
+            _probe_from = "trp1audit0000000000000000000000000000000"
+            _probe_to   = "trp1audit0000000000000000000000000000001"
+            _probe_amount = 0.001
+            _probe_token = "TRP"
+            _probe_hash = "0" * 64  # deterministic audit hash
+            _probe_ts = 1700000000  # fixed timestamp for audit probe
+            # Canonical message (same as Python send_transaction)
+            _probe_msg_str = f"{_probe_hash}:{_probe_from}:{_probe_to}:{_probe_amount}:{_probe_token}:{_probe_ts}"
+            _probe_msg = _probe_msg_str.encode()
             _probe_sigs = hybrid_signer.sign_hybrid(_probe_msg, _probe_kp)
-            _probe_msg_hex = _probe_msg.hex()
             _probe_ed_sig = _probe_sigs.get("ed25519_sig", "")
             _probe_ed_pub = _probe_kp.get("ed25519", {}).get("public", "")
             _probe_dil_sig = _probe_sigs.get("dilithium3_sig", "")
+            _probe_payload = {
+                "from": _probe_from,
+                "to": _probe_to,
+                "amount": _probe_amount,
+                "data": f"token:{_probe_token},hash:{_probe_hash}",
+                "tx_hash": _probe_hash,
+                "token_symbol": _probe_token,
+                "timestamp": _probe_ts,
+                "ed25519_sig": _probe_ed_sig,
+                "ed25519_pub": _probe_ed_pub,
+                "dilithium3_sig": _probe_dil_sig,
+                "pqc_engine": "audit_probe",
+            }
 
             async with _hx.AsyncClient(timeout=3.0) as _cl:
-                # 5a. Valid signature probe — Go must accept (200)
-                _valid_r = await _cl.post(f"{GO_CONSENSUS_URL}/tx", json={
-                    "from": "trp1audit0000000000000000000000000000000",
-                    "to": "trp1audit0000000000000000000000000000001",
-                    "amount": 0.0,
-                    "data": "audit_probe",
-                    "ed25519_sig": _probe_ed_sig,
-                    "ed25519_pub": _probe_ed_pub,
-                    "dilithium3_sig": _probe_dil_sig,
-                    "tx_msg_hex": _probe_msg_hex,
-                    "pqc_engine": "audit_probe",
-                })
-                # Accept 200 (success) or business-logic 400 (balance/account errors) — not sig errors
+                # 5a. Valid signature probe — Go verifies against reconstructed canonical message
+                # Expected: 200 (accepted) or 400 due to business logic only (not sig error)
+                _valid_r = await _cl.post(f"{GO_CONSENSUS_URL}/tx", json=_probe_payload)
                 _valid_text = _valid_r.text.lower()
-                _sig_error_keywords = ["signature_invalid", "invalid_sig", "signature_invalid", "invalid_hex", "wrong_size", "too_short", "incomplete_pqc"]
-                _is_sig_error = any(kw in _valid_text for kw in _sig_error_keywords)
-                _valid_ok = (_valid_r.status_code == 200) or (_valid_r.status_code == 400 and not _is_sig_error)
+                _sig_error_kw = ["signature_invalid", "invalid_sig", "invalid_hex",
+                                 "wrong_size", "too_short", "missing_pqc"]
+                _valid_ok = (
+                    _valid_r.status_code == 200
+                    or (_valid_r.status_code == 400
+                        and not any(kw in _valid_text for kw in _sig_error_kw))
+                )
 
-                # 5b. Invalid signature probe — Go must reject (400)
-                _bad_sig = "ff" * 64  # 64-byte garbage signature
-                _invalid_r = await _cl.post(f"{GO_CONSENSUS_URL}/tx", json={
-                    "from": "trp1audit0000000000000000000000000000000",
-                    "to": "trp1audit0000000000000000000000000000001",
-                    "amount": 0.0,
-                    "data": "audit_probe",
-                    "ed25519_sig": _bad_sig,
-                    "ed25519_pub": _probe_ed_pub,
-                    "dilithium3_sig": _probe_dil_sig,
-                    "tx_msg_hex": _probe_msg_hex,
-                    "pqc_engine": "audit_probe",
-                })
-                _invalid_rejected = _invalid_r.status_code == 400
+                # 5b. Invalid signature probe — Go must return 400 ed25519_signature_invalid
+                _bad_sig = "ff" * 64  # correct length, invalid bytes
+                _invalid_payload = dict(_probe_payload)
+                _invalid_payload["ed25519_sig"] = _bad_sig
+                _invalid_r = await _cl.post(f"{GO_CONSENSUS_URL}/tx", json=_invalid_payload)
+                _invalid_text = _invalid_r.text.lower()
+                _invalid_rejected = (
+                    _invalid_r.status_code == 400
+                    and "ed25519_signature_invalid" in _invalid_text
+                )
 
                 _go_verification = _valid_ok and _invalid_rejected
-                _go_verify_note = f"valid_sig:{_valid_ok} invalid_rejected:{_invalid_rejected}"
-        else:
-            # Fallback: just check reachability
-            _stats_r = await _hx.AsyncClient(timeout=2.0).__aenter__()
-            _go_verify_note = "hybrid_signer_missing"
-    except Exception as _go_e:
-        _go_verify_note = str(_go_e)[:100]
+                _go_verify_note = (f"valid_sig:{_valid_ok}(status={_valid_r.status_code}) "
+                                   f"invalid_rejected:{_invalid_rejected}(status={_invalid_r.status_code})")
+        except Exception as _go_e:
+            _go_verify_note = str(_go_e)[:120]
 
     # 6. Rust PQC bridge reachable
     _rust_bridge = False
