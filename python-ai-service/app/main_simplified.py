@@ -293,91 +293,26 @@ try:
 except ImportError:
     AI_ENGINE_ENABLED = True
 
-# ── Module-level NumPy MLP PoI engine (always active — no external import) ─────
+# ── Module-level NumPy MLP PoI engine — ProofOfIntelligenceEngine from ai_engine ─
 _poi_ml_engine = None
 try:
-    import numpy as _np_poi
+    try:
+        from .ai_engine import ProofOfIntelligenceEngine as _PoIEngineClass
+    except ImportError:
+        import importlib.util as _iutil, os as _os
+        _spec = _iutil.spec_from_file_location(
+            "ai_engine",
+            _os.path.join(_os.path.dirname(__file__), "ai_engine.py"),
+        )
+        _ae_mod = _iutil.module_from_spec(_spec)
+        _spec.loader.exec_module(_ae_mod)
+        _PoIEngineClass = _ae_mod.ProofOfIntelligenceEngine
 
-    class _InlineNumPyPoI:
-        """
-        Inline 2-layer NumPy MLP: 10→64→32→1 (sigmoid).
-        Seeded deterministically; fraud probability varies per input.
-        No external module imports required.
-        """
-        def __init__(self):
-            rng = _np_poi.random.RandomState(42)
-            self.W1 = rng.randn(10, 64) * _np_poi.sqrt(2.0 / 10)
-            self.b1 = _np_poi.zeros((1, 64))
-            self.W2 = rng.randn(64, 32) * _np_poi.sqrt(2.0 / 64)
-            self.b2 = _np_poi.zeros((1, 32))
-            self.W3 = rng.randn(32, 1) * _np_poi.sqrt(2.0 / 32)
-            self.b3 = _np_poi.zeros((1, 1))
-            self.threshold = 0.5
-
-        @staticmethod
-        def _sig(x):
-            return 1.0 / (1.0 + _np_poi.exp(-_np_poi.clip(x, -500, 500)))
-
-        def _featurise(self, tx):
-            def _slen(v):
-                if isinstance(v, str):
-                    return float(len(v))
-                try:
-                    return float(abs(float(v)) % 1000)
-                except Exception:
-                    return 0.0
-
-            raw = _np_poi.array([
-                _slen(tx.get("data", "")),
-                float(tx.get("from_addr_age", 0)),
-                float(tx.get("to_addr_age", 0)),
-                float(tx.get("amount", 0)),
-                float(tx.get("gas_price", 0)),
-                float(tx.get("gas_limit", 0)),
-                float(tx.get("nonce", 0)),
-                _slen(tx.get("from", "")),
-                _slen(tx.get("to", "")),
-                float(hash(str(tx)) % 1000) / 1000.0,
-            ], dtype=_np_poi.float64)
-            norm = _np_poi.where(raw > 100, _np_poi.log1p(raw) / 20.0, raw / 100.0)
-            return _np_poi.clip(norm, 0.0, 1.0).reshape(1, -1)
-
-        def detect_fraud(self, tx):
-            x = self._featurise(tx)
-            h1 = self._sig(x @ self.W1 + self.b1)
-            h2 = self._sig(h1 @ self.W2 + self.b2)
-            prob = float(self._sig(h2 @ self.W3 + self.b3)[0, 0])
-            return prob > self.threshold, round(prob, 6)
-
-        def detect_fraud_batch(self, txs):
-            if not txs:
-                return []
-            X = _np_poi.vstack([self._featurise(tx) for tx in txs])
-            h1 = self._sig(X @ self.W1 + self.b1)
-            h2 = self._sig(h1 @ self.W2 + self.b2)
-            probs = self._sig(h2 @ self.W3 + self.b3).ravel()
-            return [(float(p) > self.threshold, round(float(p), 6)) for p in probs]
-
-        def train_on_batch(self, feature_vectors, labels):
-            X = _np_poi.array(feature_vectors, dtype=_np_poi.float64)
-            y = _np_poi.array(labels, dtype=_np_poi.float64).reshape(-1, 1)
-            h1 = self._sig(X @ self.W1 + self.b1)
-            h2 = self._sig(h1 @ self.W2 + self.b2)
-            probs = self._sig(h2 @ self.W3 + self.b3)
-            eps = 1e-9
-            loss = float(-_np_poi.mean(
-                y * _np_poi.log(probs + eps) + (1 - y) * _np_poi.log(1 - probs + eps)
-            ))
-            preds = (probs > 0.5).astype(_np_poi.float64)
-            acc = float(_np_poi.mean(preds == y))
-            self.b3 -= 0.001 * _np_poi.mean(probs - y, axis=0, keepdims=True)
-            return {"accuracy": round(acc, 4), "loss": round(loss, 6), "samples": len(X)}
-
-    _poi_ml_engine = _InlineNumPyPoI()
-    print("[TRISPI AI] NumPy MLP PoI engine active — real inference enabled (10→64→32→1, sigmoid)")
+    _poi_ml_engine = _PoIEngineClass()
+    print("[TRISPI AI] NumPy AI engine active — real inference enabled")
 except Exception as _poi_err:
     _poi_ml_engine = None
-    print(f"[TRISPI AI] NumPy PoI engine unavailable: {_poi_err}")
+    print(f"[TRISPI AI] PoI engine init failed: {_poi_err}")
 
 try:
     from .federated_learning import fl_engine
