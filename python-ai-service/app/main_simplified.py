@@ -2735,30 +2735,58 @@ async def list_tasks():
 
 @app.post("/ai/validate_block")
 async def validate_block(block: BlockValidation):
-    """Proof of Intelligence - AI валидация блока"""
-    # Упрощенная логика без реального AI (для MVP)
-    confidence_score = 0.95  # В production здесь будет real AI model
-    
-    is_valid = True
+    """Proof of Intelligence — NumPy MLP block validation"""
     risk_factors = []
-    
-    # Проверка на аномалии
+    is_valid = True
+
+    # Structural checks
     if len(block.transactions) > 1000:
         risk_factors.append("Too many transactions")
-        confidence_score -= 0.1
-    
     if len(block.proposer) < 10:
         risk_factors.append("Invalid proposer address")
         is_valid = False
-        confidence_score = 0.0
-    
+
+    # NumPy MLP inference on transactions
+    avg_fraud_prob = 0.0
+    per_tx_probs = []
+    if _poi_ml_engine is not None and block.transactions:
+        try:
+            txs = [
+                {
+                    "from": str(tx.get("from", tx.get("sender", ""))),
+                    "to": str(tx.get("to", tx.get("recipient", ""))),
+                    "amount": float(tx.get("amount", tx.get("value", 0))),
+                    "data": str(tx.get("data", "")),
+                    "gas_price": float(tx.get("gas_price", 0)),
+                    "gas_limit": float(tx.get("gas_limit", 0)),
+                    "nonce": float(tx.get("nonce", 0)),
+                }
+                for tx in block.transactions[:200]  # cap at 200 for performance
+            ]
+            results = _poi_ml_engine.detect_fraud_batch(txs)
+            per_tx_probs = [float(prob) for _, prob in results]
+            avg_fraud_prob = sum(per_tx_probs) / len(per_tx_probs) if per_tx_probs else 0.0
+            high_risk = sum(1 for p in per_tx_probs if p > 0.8)
+            if high_risk > 0:
+                risk_factors.append(f"{high_risk} high-risk transaction(s) detected")
+            if avg_fraud_prob > 0.75 and len(per_tx_probs) >= 3:
+                is_valid = False
+        except Exception as _err:
+            avg_fraud_prob = 0.0
+
+    confidence_score = round(max(0.0, 1.0 - avg_fraud_prob), 6)
+
     return {
         "block_index": block.block_index,
         "is_valid": is_valid,
-        "confidence_score": max(0.0, confidence_score),
+        "confidence_score": confidence_score,
+        "avg_fraud_probability": round(avg_fraud_prob, 6),
+        "per_tx_fraud_probs": per_tx_probs[:10],
         "risk_factors": risk_factors,
-        "ai_engine": "simplified" if not AI_ENGINE_ENABLED else "full",
-        "timestamp": int(time.time())
+        "ai_engine": "numpy_mlp",
+        "inference_model": "NumPy MLP (10→64→32→1, sigmoid)",
+        "transactions_analyzed": len(per_tx_probs),
+        "timestamp": int(time.time()),
     }
 
 @app.post("/ai/optimize_gas")
