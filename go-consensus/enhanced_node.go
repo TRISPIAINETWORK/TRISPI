@@ -968,6 +968,7 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
                 From          string  `json:"from"`
                 To            string  `json:"to"`
                 Amount        float64 `json:"amount"`
+                AmountStr     string  `json:"amount_str"` // Python str(amount) — exact format for canonical msg
                 Data          string  `json:"data"`
                 TxHash        string  `json:"tx_hash"`
                 TokenSymbol   string  `json:"token_symbol"`
@@ -1008,9 +1009,14 @@ func (n *EnhancedNode) HandlePostTx(w http.ResponseWriter, r *http.Request) {
         }
 
         // Reconstruct canonical message from transaction fields — do NOT trust client-supplied bytes.
-        // Must match Python: f"{tx_hash}:{sender}:{recipient}:{amount}:{token_symbol}:{ts}"
-        canonicalMsg := fmt.Sprintf("%s:%s:%s:%g:%s:%d",
-                req.TxHash, req.From, req.To, req.Amount, req.TokenSymbol, req.Timestamp)
+        // Use amount_str (Python str(amount)) when provided for byte-exact float formatting.
+        // Falls back to %g only for legacy clients without amount_str.
+        amountToken := req.AmountStr
+        if amountToken == "" {
+                amountToken = fmt.Sprintf("%g", req.Amount)
+        }
+        canonicalMsg := fmt.Sprintf("%s:%s:%s:%s:%s:%d",
+                req.TxHash, req.From, req.To, amountToken, req.TokenSymbol, req.Timestamp)
         msgBytes := []byte(canonicalMsg)
 
         // Decode Ed25519 key and signature
