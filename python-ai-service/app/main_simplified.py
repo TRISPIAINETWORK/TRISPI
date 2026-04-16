@@ -319,16 +319,24 @@ try:
             return 1.0 / (1.0 + _np_poi.exp(-_np_poi.clip(x, -500, 500)))
 
         def _featurise(self, tx):
+            def _slen(v):
+                if isinstance(v, str):
+                    return float(len(v))
+                try:
+                    return float(abs(float(v)) % 1000)
+                except Exception:
+                    return 0.0
+
             raw = _np_poi.array([
-                float(len(tx.get("data", ""))),
+                _slen(tx.get("data", "")),
                 float(tx.get("from_addr_age", 0)),
                 float(tx.get("to_addr_age", 0)),
                 float(tx.get("amount", 0)),
                 float(tx.get("gas_price", 0)),
                 float(tx.get("gas_limit", 0)),
                 float(tx.get("nonce", 0)),
-                float(len(tx.get("from", ""))),
-                float(len(tx.get("to", ""))),
+                _slen(tx.get("from", "")),
+                _slen(tx.get("to", "")),
                 float(hash(str(tx)) % 1000) / 1000.0,
             ], dtype=_np_poi.float64)
             norm = _np_poi.where(raw > 100, _np_poi.log1p(raw) / 20.0, raw / 100.0)
@@ -3493,17 +3501,35 @@ async def trigger_training():
 @app.post("/ai/predict")
 @app.post("/api/ai/predict")
 async def predict_fraud(data: dict):
-    """Predict if transaction is fraudulent using REAL PyTorch"""
+    """Predict if transaction is fraudulent using NumPy MLP PoI engine"""
     try:
-        from .real_ai_validator import ai_validator
-        transaction = data.get("transaction", [0.0] * 10)
-        result = ai_validator.validate_transaction(transaction)
-        return result
-    except Exception as e:
+        raw = data.get("transaction", [])
+        tx_dict: dict = {}
+        if isinstance(raw, list) and len(raw) >= 10:
+            keys = ["data", "from_addr_age", "to_addr_age", "amount", "gas_price",
+                    "gas_limit", "nonce", "from", "to", "extra"]
+            tx_dict = {k: v for k, v in zip(keys, raw)}
+        elif isinstance(raw, dict):
+            tx_dict = raw
+        else:
+            tx_dict = data.get("tx", data)
+
+        if _poi_ml_engine is not None:
+            is_fraud, prob = _poi_ml_engine.detect_fraud(tx_dict)
+            return {
+                "fraud": is_fraud,
+                "fraud_probability": prob,
+                "confidence": round(1.0 - prob, 6) if is_fraud else round(prob, 6),
+                "model": "numpy_mlp",
+                "inference_engine": "NumPy MLP (10→64→32→1, sigmoid)",
+                "valid": not is_fraud,
+            }
         if REAL_AI_ENABLED and real_ai_engine:
             transaction = data.get("transaction", [0.0] * 10)
             return real_ai_engine.predict(transaction)
-        return {"error": str(e)}
+        return {"error": "No AI engine available", "valid": True}
+    except Exception as e:
+        return {"error": str(e), "valid": True}
 
 @app.post("/ai/start")
 async def start_ai_training():
@@ -3798,10 +3824,18 @@ async def api_system_status():
     except ImportError:
         pass
 
+    _hw_scipy = False
+    try:
+        import scipy as _scipy_chk
+        _hw_scipy = True
+    except ImportError:
+        pass
+
     return {
         "trispi_version": "1.0.0",
         "hardware": {
             "numpy": _hw_numpy,
+            "scipy": _hw_scipy,
             "torch": _hw_torch,
             "cuda": _hw_cuda,
             "ai_inference_mode": "torch+numpy" if _hw_torch else ("numpy_mlp" if _hw_numpy else "unavailable"),
@@ -6615,8 +6649,18 @@ async def ai_energy_stop_session(req: AIStopSessionRequest):
 @app.get("/api/ai-energy/stats")
 async def ai_energy_get_stats():
     """Get AI energy contribution statistics"""
+    now = int(time.time())
+    online_count = 0
+    for c in ai_energy_contributors.values():
+        sid = c.get("current_session")
+        sess = ai_energy_sessions.get(sid, {}) if sid else {}
+        last_hb = sess.get("last_heartbeat", c.get("registered_at", 0))
+        if (now - last_hb) < 60:
+            online_count += 1
     return {
         **ai_energy_stats,
+        "registered_providers": len(ai_energy_contributors),
+        "online_providers": online_count,
         "active_contributors": [
             {
                 "id": c["id"][:8] + "...",
