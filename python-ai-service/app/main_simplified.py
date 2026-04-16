@@ -7299,6 +7299,37 @@ async def _verify_block_with_go(block_index: int, block_hash: str, *, retries: i
     return False
 
 
+@app.post("/api/internal/go/verify-dilithium")
+async def go_verify_dilithium(payload: dict, request: Request):
+    """Called by Go to verify a Dilithium3 signature using the real dilithium-py library.
+    Request: {message_hex: str, signature_hex: str, public_key_hex: str}
+    Response: {valid: bool, error: str|null}
+    """
+    caller_host = request.client.host if request.client else ""
+    if caller_host not in _INTERNAL_HOSTS:
+        raise HTTPException(status_code=403, detail="Callback only accepted from localhost")
+
+    message_hex = payload.get("message_hex", "")
+    signature_hex = payload.get("signature_hex", "")
+    public_key_hex = payload.get("public_key_hex", "")
+
+    if not message_hex or not signature_hex or not public_key_hex:
+        return {"valid": False, "error": "missing_fields"}
+
+    try:
+        msg_bytes = bytes.fromhex(message_hex)
+        # Use the dilithium verifier from the hybrid signer (dilithium-py real implementation)
+        if hybrid_signer is not None:
+            valid = hybrid_signer.dilithium.verify(msg_bytes, signature_hex, public_key_hex)
+        else:
+            return {"valid": False, "error": "hybrid_signer_not_initialized"}
+        return {"valid": bool(valid), "error": None}
+    except ValueError as _ve:
+        return {"valid": False, "error": f"hex_decode_error: {_ve}"}
+    except Exception as _e:
+        return {"valid": False, "error": f"verify_error: {_e}"}
+
+
 @app.post("/api/internal/go/block-mined")
 async def go_block_mined(payload: dict, request: Request):
     """Called by Go after mining a block — Python credits block rewards and syncs state."""
@@ -7619,6 +7650,7 @@ async def security_audit():
             _probe_ed_sig = _probe_sigs.get("ed25519_sig", "")
             _probe_ed_pub = _probe_kp.get("ed25519", {}).get("public", "")
             _probe_dil_sig = _probe_sigs.get("dilithium3_sig", "")
+            _probe_dil_pub = _probe_kp.get("dilithium3", {}).get("public", "")
             _probe_payload = {
                 "from": _probe_from,
                 "to": _probe_to,
@@ -7630,6 +7662,7 @@ async def security_audit():
                 "ed25519_sig": _probe_ed_sig,
                 "ed25519_pub": _probe_ed_pub,
                 "dilithium3_sig": _probe_dil_sig,
+                "dilithium3_pub": _probe_dil_pub,
                 "pqc_engine": "audit_probe",
             }
 
