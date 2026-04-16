@@ -156,6 +156,7 @@ if TORCH_AVAILABLE:
 
 def _tx_features_numpy(tx: Dict[str, Any]) -> np.ndarray:
     """Extract 10 normalised features from a transaction dict."""
+    import hashlib as _hashlib
     amount = float(tx.get("amount", 0))
     gas_price = float(tx.get("gas_price", 0))
     gas_limit = float(tx.get("gas_limit", 0))
@@ -165,7 +166,9 @@ def _tx_features_numpy(tx: Dict[str, Any]) -> np.ndarray:
     to_age = float(tx.get("to_addr_age", 0))
     from_len = float(len(tx.get("from", "")))
     to_len = float(len(tx.get("to", "")))
-    hash_feat = float(hash(str(tx)) % 1000) / 1000.0
+    # Stable cross-process hash using SHA-256 (avoids Python hash randomization)
+    _tx_str = f"{tx.get('from','')}{tx.get('to','')}{tx.get('amount',0)}{tx.get('nonce',0)}"
+    hash_feat = int(_hashlib.sha256(_tx_str.encode()).hexdigest()[:8], 16) % 1000 / 1000.0
 
     raw = np.array([
         data_len, from_age, to_age,
@@ -215,17 +218,8 @@ class ProofOfIntelligenceEngine:
         return np_feats
 
     def detect_fraud(self, tx: Dict[str, Any]) -> Tuple[bool, float]:
-        """Run real ML inference — returns (is_fraud, fraud_probability)."""
-        if TORCH_AVAILABLE and self._torch_fraud_model is not None:
-            try:
-                self._torch_fraud_model.eval()
-                with torch.no_grad():
-                    features = self.extract_tx_features(tx)
-                    prob = float(self._torch_fraud_model(features).item())
-                return prob > self.fraud_threshold, prob
-            except Exception:
-                pass
-
+        """Run real NumPy MLP inference — returns (is_fraud, fraud_probability).
+        Always uses the NumPy path for deterministic PoI scoring."""
         np_feats = _tx_features_numpy(tx)
         prob = self.numpy_fraud_model.predict(np_feats)
         return prob > self.fraud_threshold, round(prob, 6)
@@ -251,7 +245,7 @@ class ProofOfIntelligenceEngine:
                         float(tx.get("loops", 0)),
                         float(len(tx.get("code", ""))),
                         float(tx.get("current_gas_price", 100)),
-                        float(hash(str(tx)) % 100),
+                        int(hashlib.sha256(str(tx).encode()).hexdigest()[:4], 16) % 100 / 1.0,
                     ], dtype=torch.float32).to(self._torch_device)
                     return max(21000, int(self._torch_gas_model(features).item() * 10000))
             except Exception:
