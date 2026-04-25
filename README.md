@@ -3,8 +3,7 @@
 > **Web4 · AI-Powered · Post-Quantum Secure · EVM + WASM**
 
 [![Website](https://img.shields.io/badge/Website-trispi.org-blue)](https://trispi.org)
-[![Telegram](https://img.shields.io/badge/Telegram-@trispiainetwork-26A5E4)](https://t.me/trispiainetwork)
-[![Chain ID](https://img.shields.io/badge/Chain%20ID-7878-green)](https://trispi.org)
+
 
 ---
 
