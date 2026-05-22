@@ -1187,19 +1187,61 @@ Example: 10 validators → 7 COMMITs required for finality
       <table>
         <thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>
         <tbody>
+          <tr><td><code>/health</code></td><td>GET</td><td>Node health — all service statuses</td></tr>
           <tr><td><code>/api/tokenomics</code></td><td>GET</td><td>Full token economics state</td></tr>
           <tr><td><code>/api/network/status</code></td><td>GET</td><td>Live network stats (peers, TPS, block height)</td></tr>
+          <tr><td><code>/api/network/peers/register</code></td><td>POST</td><td>Register your node with the mainnet</td></tr>
+          <tr><td><code>/api/network/bootstrap</code></td><td>GET</td><td>Bootstrap data: chain head + peer list</td></tr>
           <tr><td><code>/api/explorer/blocks</code></td><td>GET</td><td>Recent blocks with signatures</td></tr>
+          <tr><td><code>/api/explorer/tx/{tx_id}</code></td><td>GET</td><td>Transaction details by ID</td></tr>
           <tr><td><code>/api/balance/{address}</code></td><td>GET</td><td>TRP balance for any address</td></tr>
-          <tr><td><code>/api/transfer</code></td><td>POST</td><td>Signed token transfer</td></tr>
-          <tr><td><code>/api/wallet/create</code></td><td>POST</td><td>BIP39 mnemonic wallet generation</td></tr>
+          <tr><td><code>/api/tokens/transfer</code></td><td>POST</td><td>Signed token transfer</td></tr>
+          <tr><td><code>/api/wallet/create</code></td><td>POST</td><td>BIP39 24-word mnemonic wallet (Ed25519 + Dilithium3)</td></tr>
+          <tr><td><code>/api/engine/deploy</code></td><td>POST</td><td>Deploy EVM or WASM smart contract</td></tr>
+          <tr><td><code>/api/engine/call</code></td><td>POST</td><td>Call a deployed contract method</td></tr>
+          <tr><td><code>/api/engine/contracts</code></td><td>GET</td><td>List all deployed contracts</td></tr>
+          <tr><td><code>/api/contract/audit</code></td><td>POST</td><td>AI-powered contract security audit</td></tr>
+          <tr><td><code>/api/chains/scaffold</code></td><td>POST</td><td>Generate custom blockchain project ZIP (Go/Rust/Solidity)</td></tr>
+          <tr><td><code>/api/chains/register</code></td><td>POST</td><td>Register a custom chain as a TRISPI subnet</td></tr>
+          <tr><td><code>/api/chain/sync-block</code></td><td>POST</td><td>Submit block header from your chain</td></tr>
+          <tr><td><code>/api/validators</code></td><td>GET</td><td>Active validators with stake &amp; PoI scores</td></tr>
+          <tr><td><code>/api/validators/stake</code></td><td>POST</td><td>Stake TRP to become a validator (min 10 000 TRP)</td></tr>
+          <tr><td><code>/api/poi/scores</code></td><td>GET</td><td>Proof of Intelligence scores for all validators</td></tr>
+          <tr><td><code>/api/ai-energy/register</code></td><td>POST</td><td>Register as an Energy Provider</td></tr>
+          <tr><td><code>/api/ai-energy/heartbeat</code></td><td>POST</td><td>Send heartbeat — earns TRP automatically</td></tr>
+          <tr><td><code>/api/ai-energy/providers</code></td><td>GET</td><td>Active providers with earnings and compute scores</td></tr>
+          <tr><td><code>/api/gas/recommend</code></td><td>GET</td><td>AI-recommended gas price</td></tr>
           <tr><td><code>/api/pqc/status</code></td><td>GET</td><td>Post-quantum cryptography status</td></tr>
-          <tr><td><code>/graphql</code></td><td>GET/POST</td><td>GraphQL API for rich queries</td></tr>
           <tr><td><code>/api/governance/proposals</code></td><td>GET</td><td>Active governance proposals</td></tr>
-          <tr><td><code>/api/fleet/stats</code></td><td>GET</td><td>Miner fleet statistics</td></tr>
+          <tr><td><code>/api/governance/vote</code></td><td>POST</td><td>Vote on a governance proposal</td></tr>
+          <tr><td><code>/rpc</code></td><td>POST</td><td>MetaMask / ethers.js JSON-RPC (Chain ID 7878)</td></tr>
+          <tr><td><code>/api/graphql</code></td><td>GET/POST</td><td>GraphQL API for rich queries</td></tr>
+          <tr><td><code>/api/docs</code></td><td>GET</td><td>Interactive Swagger UI</td></tr>
         </tbody>
       </table>
     </div>
+
+    <h3 style="margin-top:32px">15.2 Quick Connection Guide</h3>
+    <p>Connect to TRISPI mainnet in under 60 seconds:</p>
+    <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:20px;overflow-x:auto;font-size:.85rem;line-height:1.7"><code># 1. Check network health
+curl https://trispi.org/health
+
+# 2. Create a wallet
+curl -X POST https://trispi.org/api/wallet/create
+
+# 3. Add to MetaMask manually:
+#    RPC URL  → https://trispi.org/rpc
+#    Chain ID → 7878
+#    Symbol   → TRP
+
+# 4. Run an Energy Provider (earn TRP):
+git clone https://github.com/TRISPIAINETWORK/TRISPI.git
+pip install requests psutil numpy
+python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS
+
+# 5. Scaffold a custom blockchain:
+curl -X POST https://trispi.org/api/chains/scaffold \
+  -d '{"chain_name":"my-chain","language":"go"}' -o my-chain.zip</code></pre>
   </div>
 
   <div class="page-break"></div>
@@ -1236,24 +1278,57 @@ Example: 10 validators → 7 COMMITs required for finality
     </div>
 
     <div class="metrics" style="margin-top:40px">
-      <div class="metric"><div class="val">4,700+</div><div class="lbl">Blocks Mined</div><div class="sub">and growing</div></div>
-      <div class="metric"><div class="val">1,000+</div><div class="lbl">Active Nodes</div><div class="sub">10 regions</div></div>
+      <div class="metric"><div class="val">12,000+</div><div class="lbl">Blocks Mined</div><div class="sub">and growing</div></div>
+      <div class="metric"><div class="val">1,000+</div><div class="lbl">Active Nodes</div><div class="sub">worldwide</div></div>
       <div class="metric"><div class="val">128-bit</div><div class="lbl">Quantum Security</div><div class="sub">Dilithium3 NIST L3</div></div>
       <div class="metric"><div class="val">50M TRP</div><div class="lbl">Genesis Supply</div><div class="sub">deflationary model</div></div>
+      <div class="metric"><div class="val">3</div><div class="lbl">Runtimes</div><div class="sub">Go · Rust · Solidity</div></div>
+      <div class="metric"><div class="val">7878</div><div class="lbl">Chain ID</div><div class="sub">MetaMask compatible</div></div>
     </div>
 
-    <h3>References & Standards</h3>
+    <h3 style="margin-top:40px">Get Started Now</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:16px">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:20px">
+        <div style="font-size:1.4rem;margin-bottom:8px">⚡</div>
+        <strong style="color:var(--primary)">Energy Provider</strong>
+        <p style="font-size:.88rem;color:var(--muted);margin-top:6px">Earn TRP in 5 minutes by contributing CPU/GPU to the AI network.</p>
+        <a href="https://github.com/TRISPIAINETWORK/TRISPI/blob/main/NODE_SETUP.md" style="font-size:.82rem;color:var(--accent)">→ NODE_SETUP.md</a>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:20px">
+        <div style="font-size:1.4rem;margin-bottom:8px">🖥️</div>
+        <strong style="color:var(--primary)">RPC Node</strong>
+        <p style="font-size:.88rem;color:var(--muted);margin-top:6px">Run a public JSON-RPC endpoint for MetaMask and dApp developers.</p>
+        <a href="https://github.com/TRISPIAINETWORK/TRISPI/blob/main/NODE_SETUP.md#3-run-an-rpc-node" style="font-size:.82rem;color:var(--accent)">→ RPC Node Guide</a>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:20px">
+        <div style="font-size:1.4rem;margin-bottom:8px">🔗</div>
+        <strong style="color:var(--primary)">Custom Blockchain</strong>
+        <p style="font-size:.88rem;color:var(--muted);margin-top:6px">Scaffold a Go, Rust, or Solidity parachain and connect it as a subnet.</p>
+        <a href="https://github.com/TRISPIAINETWORK/TRISPI/blob/main/docs/BLOCKCHAIN_CREATION.md" style="font-size:.82rem;color:var(--accent)">→ Blockchain Creation Guide</a>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:20px">
+        <div style="font-size:1.4rem;margin-bottom:8px">📄</div>
+        <strong style="color:var(--primary)">Smart Contracts</strong>
+        <p style="font-size:.88rem;color:var(--muted);margin-top:6px">Deploy Solidity or WASM contracts on the EVM + WASM dual runtime.</p>
+        <a href="https://github.com/TRISPIAINETWORK/TRISPI/blob/main/docs/API.md#4-smart-contracts-evm--wasm" style="font-size:.82rem;color:var(--accent)">→ API Reference</a>
+      </div>
+    </div>
+
+    <h3 style="margin-top:40px">References &amp; Standards</h3>
     <ul>
       <li>NIST FIPS 204 — Module-Lattice-Based Digital Signature Standard (Dilithium3)</li>
       <li>NIST FIPS 186-5 — Digital Signature Standard (Ed25519)</li>
+      <li>NIST FIPS 203 — Module-Lattice-Based Key-Encapsulation Mechanism (Kyber1024)</li>
       <li>BIP39 — Mnemonic code for generating deterministic keys</li>
       <li>BIP44 — Multi-Account Hierarchy for Deterministic Wallets</li>
       <li>EIP-1559 — Fee market change for ETH 1.0 chain</li>
       <li>libp2p — Modular peer-to-peer networking framework</li>
-      <li>PBFT — Practical Byzantine Fault Tolerance (Castro & Liskov, 1999)</li>
+      <li>PBFT — Practical Byzantine Fault Tolerance (Castro &amp; Liskov, 1999)</li>
       <li>Satoshi Nakamoto — Bitcoin: A Peer-to-Peer Electronic Cash System (2008)</li>
       <li>Vitalik Buterin et al. — Ethereum Yellow Paper</li>
       <li>CRYSTALS-Dilithium — Algorithm Specifications and Supporting Documentation</li>
+      <li>CosmWasm — Smart contracting platform for the Cosmos ecosystem</li>
+      <li>IBC — Inter-Blockchain Communication Protocol (Cosmos SDK)</li>
     </ul>
   </div>
 
@@ -1265,8 +1340,13 @@ Example: 10 validators → 7 COMMITs required for finality
     <p style="margin-bottom:8px">
       <strong>TRISPI AI-Powered Web4 Blockchain Network</strong>
     </p>
-    <p style="margin-bottom:16px">
-      Technical Whitepaper v1.0 · April 2026 · Chain ID 7878
+    <p style="margin-bottom:8px">
+      Technical Whitepaper v1.1 · May 2026 · Chain ID 7878
+    </p>
+    <p style="margin-bottom:16px;font-size:.9rem;color:var(--muted)">
+      RPC: <code style="font-family:monospace;font-size:.82rem">https://trispi.org/rpc</code> &nbsp;·&nbsp;
+      API: <code style="font-family:monospace;font-size:.82rem">https://trispi.org/api</code> &nbsp;·&nbsp;
+      Telegram: <a href="https://t.me/trispiainetwork">@trispiainetwork</a>
     </p>
     <p>
       This document is provided for informational purposes only. Nothing herein constitutes
