@@ -1,0 +1,84 @@
+# TRISPI Full Node — single-image multi-service
+# Runs: Go consensus + Python AI service + Rust core + frontend static server
+#
+# Build:   docker build -f Dockerfile.fullnode -t trispi-node:latest .
+# Run:     docker run -d --name trispi-node --env-file .env.node \
+#              -p 5000:5000 -p 8000:8000 -p 8181:8181 \
+#              -p 6000:6000 -p 50052:50052 \
+#              -v trispi-data:/app/data \
+#              trispi-node:latest
+
+# ── Stage 1: Build Go consensus node ──────────────────────────────────────────
+FROM golang:1.24-alpine AS go-builder
+WORKDIR /build
+RUN apk add --no-cache git
+COPY go-consensus/go.mod go-consensus/go.sum ./
+RUN go mod download
+COPY go-consensus/*.go ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -o trispi-consensus .
+
+# ── Stage 2: Build Rust core ──────────────────────────────────────────────────
+FROM rust:1.78-slim AS rust-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+COPY rust-core/Cargo.toml rust-core/Cargo.lock ./
+COPY rust-core/src ./src
+RUN cargo build --release 2>&1 | tail -5
+
+# ── Stage 3: Runtime image ────────────────────────────────────────────────────
+FROM python:3.11-slim-bookworm AS runtime
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates supervisor nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Go binary
+COPY --from=go-builder /build/trispi-consensus /app/go-consensus/trispi-consensus
+
+# Rust binary
+COPY --from=rust-builder /build/target/release/trispi-core /app/rust-core/trispi-core
+
+# Python AI service
+WORKDIR /app
+COPY python-ai-service/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY python-ai-service/ /app/python-ai-service/
+
+# Frontend (pre-built static files)
+COPY frontend/dist/ /app/frontend/dist/
+COPY serve_frontend.js /app/serve_frontend.js
+
+# Go consensus keys + genesis
+COPY go-consensus/keys/ /app/go-consensus/keys/
+COPY genesis.json /app/genesis.json 2>/dev/null || true
+
+# Persistent data dirs
+RUN mkdir -p /app/data/chain \
+             /app/data/state \
+             /app/python-ai-service/secrets \
+             /app/python-ai-service/trispi_state
+
+# Supervisor config: run all 4 services
+COPY docker/supervisord.conf /etc/supervisor/conf.d/trispi.conf
+
+# Env defaults (override via --env-file)
+ENV PYTHONUNBUFFERED=1 \
+    TRISPI_BOOTSTRAP="" \
+    BLOCK_MINED_SECRET=trispi-internal-block-secret \
+    PORT=5000 \
+    GO_PORT=8181 \
+    RUST_PORT=6000 \
+    PYTHON_PORT=8000
+
+EXPOSE 5000 8000 8181 6000 50052
+
+VOLUME ["/app/data", "/app/python-ai-service/secrets"]
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=5 \
+    CMD curl -sf http://localhost:8000/api/health | python3 -c \
+        "import json,sys; d=json.load(sys.stdin); exit(0 if d.get('status')=='online' else 1)" || exit 1
+
+ENTRYPOINT ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/trispi.conf"]
