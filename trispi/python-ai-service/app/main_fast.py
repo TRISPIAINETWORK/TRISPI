@@ -945,7 +945,43 @@ async def explorer_txs(request: Request):
 async def explorer_address(address: str, request: Request):
     if r := await _forward(request):
         return r
-    return {"address": address, "balance": 0, "transactions": []}
+    balance = 0.0
+    if _pg:
+        try:
+            balance = await _pg.get_balance(address)
+        except Exception:
+            pass
+    return {"address": address, "balance": balance, "transactions": []}
+
+
+@app.get("/api/balance/{address}")
+async def get_balance(address: str, request: Request):
+    """
+    GET /api/balance/{address}
+    Returns TRP balance for an address from PostgreSQL live state.
+    Falls back to 0 when the address is not known.
+    """
+    if r := await _forward(request):
+        return r
+    balance = 0.0
+    if _pg:
+        try:
+            balance = await _pg.get_balance(address)
+        except Exception:
+            pass
+    go_balance = 0.0
+    try:
+        go_data = await _go(f"/balance/{address}") or {}
+        go_balance = float(go_data.get("balance", 0) or 0)
+    except Exception:
+        pass
+    final_balance = max(balance, go_balance)
+    return {
+        "address": address,
+        "balance": final_balance,
+        "balance_trp": final_balance,
+        "source": "postgresql" if balance > 0 else ("go" if go_balance > 0 else "not_found"),
+    }
 
 
 # ── PoI ───────────────────────────────────────────────────────────────────────
