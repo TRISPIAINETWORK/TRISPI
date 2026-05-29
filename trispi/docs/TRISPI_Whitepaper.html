@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRISPI Technical Whitepaper v3.0</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --code-bg: #0d1117;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.8;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Cover ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 24px;
+    background: radial-gradient(ellipse at 50% 0%, #1e1040 0%, var(--bg) 70%);
+    border-bottom: 1px solid var(--border);
+  }
+  .cover-logo {
+    font-size: 80px;
+    font-weight: 900;
+    letter-spacing: -4px;
+    font-family: 'Arial Black', sans-serif;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+  .cover-tagline {
+    font-size: 22px;
+    color: #a78bfa;
+    font-family: sans-serif;
+    margin-bottom: 32px;
+    letter-spacing: 1px;
+  }
+  .cover-meta {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 2;
+  }
+  .cover-badges {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 28px 0;
+  }
+  .badge {
+    background: rgba(99,102,241,0.15);
+    border: 1px solid rgba(99,102,241,0.4);
+    color: #a78bfa;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-family: sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── TOC ── */
+  .toc-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 40px;
+    margin: 48px auto;
+    max-width: 720px;
+  }
+  .toc-title {
+    font-family: sans-serif;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .toc-list { list-style: none; }
+  .toc-list li { border-bottom: 1px solid var(--border); }
+  .toc-list li:last-child { border-bottom: none; }
+  .toc-list a {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 4px;
+    font-family: sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    transition: color 0.15s;
+  }
+  .toc-list a:hover { color: #a78bfa; text-decoration: none; }
+  .toc-num { color: var(--accent); font-weight: 700; margin-right: 12px; }
+  .toc-dots { flex: 1; border-bottom: 1px dotted var(--border); margin: 0 10px; position: relative; top: -6px; }
+
+  /* ── Layout ── */
+  .doc {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 0 24px 120px;
+  }
+
+  /* ── Section ── */
+  .section {
+    margin: 72px 0;
+    scroll-margin-top: 80px;
+  }
+  .section-num {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-family: 'Arial Black', sans-serif;
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    color: #fff;
+    margin-bottom: 28px;
+    line-height: 1.2;
+  }
+  h3 {
+    font-family: sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: #c4b5fd;
+    margin: 36px 0 14px;
+  }
+  h4 {
+    font-family: sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  p { margin-bottom: 18px; }
+  .lead {
+    font-size: 20px;
+    color: #94a3b8;
+    margin-bottom: 28px;
+    line-height: 1.7;
+  }
+
+  /* ── Divider ── */
+  .rule {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 56px 0;
+  }
+
+  /* ── Code ── */
+  code {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: #7dd3fc;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    overflow-x: auto;
+    margin: 24px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #e2e8f0;
+  }
+  pre .comment { color: #4b5563; }
+  pre .kw { color: #a78bfa; }
+  pre .str { color: #6ee7b7; }
+  pre .num { color: #fbbf24; }
+
+  /* ── Info boxes ── */
+  .box {
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    border-left: 4px solid;
+  }
+  .box.info  { background: rgba(99,102,241,0.08); border-color: var(--accent); }
+  .box.warn  { background: rgba(245,158,11,0.08); border-color: #f59e0b; }
+  .box.green { background: rgba(16,185,129,0.08); border-color: #10b981; }
+  .box-title { font-family: sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .box.info  .box-title { color: #818cf8; }
+  .box.warn  .box-title { color: #fbbf24; }
+  .box.green .box-title { color: #34d399; }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-family: sans-serif;
+    font-size: 14px;
+  }
+  th {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+  td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+  /* ── Formula ── */
+  .formula {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 28px;
+    margin: 20px 0;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    color: #c4b5fd;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Architecture diagram ── */
+  .arch {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    margin: 28px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: #94a3b8;
+  }
+  .arch .hl { color: #a78bfa; font-weight: bold; }
+  .arch .green { color: #34d399; }
+  .arch .blue  { color: #7dd3fc; }
+
+  /* ── Metric cards ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin: 28px 0;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .metric-val {
+    font-family: 'Arial Black', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    color: #a78bfa;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .metric-lbl {
+    font-family: sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  /* ── Steps ── */
+  .steps { margin: 20px 0; }
+  .step {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(99,102,241,0.2);
+    border: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .step-content h4 { margin: 0 0 6px; font-family: sans-serif; font-size: 15px; font-weight: 700; color: #fff; text-transform: none; letter-spacing: 0; }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 48px 24px;
+    border-top: 1px solid var(--border);
+    font-family: sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 2;
+  }
+  footer a { color: var(--muted); }
+
+  /* ── Sticky header ── */
+  .sticky-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .sticky-logo {
+    font-family: 'Arial Black', sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #6366f1, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .sticky-title {
+    font-family: sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .sticky-dl {
+    font-family: sans-serif;
+    font-size: 12px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 6px 14px;
+    border-radius: 20px;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .sticky-dl:hover { background: rgba(99,102,241,0.15); text-decoration: none; }
+
+  /* push content below sticky header */
+  .doc { padding-top: 80px; }
+  .cover { padding-top: 120px; }
+
+  @media print {
+    .sticky-header { display: none; }
+    body { background: #fff; color: #000; }
+    .cover { min-height: auto; background: #fff; }
+    .cover-logo { -webkit-text-fill-color: #4f46e5; }
+    pre, .arch, .formula { border: 1px solid #ddd; }
+    .box { border: 1px solid #ddd; }
+  }
+  @media (max-width: 640px) {
+    .cover-logo { font-size: 52px; }
+    h2 { font-size: 26px; }
+    .metrics { grid-template-columns: 1fr 1fr; }
+    .sticky-title { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="sticky-header">
+  <span class="sticky-logo">TRISPI</span>
+  <span class="sticky-title">Technical Whitepaper v3.0 — May 2026</span>
+  <a class="sticky-dl" href="/" title="Back to app">← App</a>
+</header>
+
+<!-- ══════════════════════ COVER ══════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">TRISPI</div>
+  <div class="cover-tagline">The Autonomous AI Blockchain Network</div>
+  <div class="cover-badges">
+    <span class="badge">Web4</span>
+    <span class="badge">Post-Quantum</span>
+    <span class="badge">Proof of Intelligence</span>
+    <span class="badge">EVM + WASM</span>
+    <span class="badge">Federated Learning</span>
+  </div>
+  <div class="cover-meta">
+    <div><strong style="color:#a78bfa">Technical Whitepaper — Version 3.0</strong></div>
+    <div>Chain ID: 7878 &nbsp;|&nbsp; TRP Token &nbsp;|&nbsp; May 2026</div>
+    <div style="margin-top:8px">TRISPI AI Network Foundation</div>
+    <div><a href="https://github.com/TRISPIAINETWORK/TRISPI" style="color:#6366f1">github.com/TRISPIAINETWORK/TRISPI</a></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ TOC ══════════════════════ -->
+<div class="doc">
+  <div class="toc-wrap">
+    <div class="toc-title">Table of Contents</div>
+    <ul class="toc-list">
+      <li><a href="#abstract"><span><span class="toc-num">1</span> Abstract</span><span class="toc-dots"></span></a></li>
+      <li><a href="#intro"><span><span class="toc-num">2</span> Introduction &amp; Vision</span><span class="toc-dots"></span></a></li>
+      <li><a href="#architecture"><span><span class="toc-num">3</span> System Architecture</span><span class="toc-dots"></span></a></li>
+      <li><a href="#poi"><span><span class="toc-num">4</span> Proof of Intelligence (PoI)</span><span class="toc-dots"></span></a></li>
+      <li><a href="#pqc"><span><span class="toc-num">5</span> Post-Quantum Cryptography</span><span class="toc-dots"></span></a></li>
+      <li><a href="#fl"><span><span class="toc-num">6</span> Federated Learning &amp; Decentralized AI</span><span class="toc-dots"></span></a></li>
+      <li><a href="#runtime"><span><span class="toc-num">7</span> EVM + WASM Dual Runtime</span><span class="toc-dots"></span></a></li>
+      <li><a href="#tokenomics"><span><span class="toc-num">8</span> TRP Tokenomics</span><span class="toc-dots"></span></a></li>
+      <li><a href="#network"><span><span class="toc-num">9</span> Network &amp; P2P Layer</span><span class="toc-dots"></span></a></li>
+      <li><a href="#security"><span><span class="toc-num">10</span> Security Model</span><span class="toc-dots"></span></a></li>
+      <li><a href="#roadmap"><span><span class="toc-num">11</span> Roadmap</span><span class="toc-dots"></span></a></li>
+      <li><a href="#conclusion"><span><span class="toc-num">12</span> Conclusion</span><span class="toc-dots"></span></a></li>
+    </ul>
+  </div>
+
+  <!-- ══ ABSTRACT ══ -->
+  <section class="section" id="abstract">
+    <div class="section-num">§ 01</div>
+    <h2>Abstract</h2>
+    <p class="lead">TRISPI is a Web4 blockchain network where AI agents act as validators, smart contracts are self-healing, and compute power fuels the intelligence layer. Protected by post-quantum cryptography, TRISPI replaces wasteful Proof of Work with Proof of Intelligence.</p>
+    <p>Unlike existing Layer-1 networks, TRISPI treats artificial intelligence as a first-class consensus primitive. Every block is validated by a distributed AI ensemble running Proof of Intelligence (PoI), where the quality of machine-learning inference replaces hash computation as the measure of honest participation. Validators earn TRP tokens proportional to the accuracy and consistency of their local AI models.</p>
+    <p>The network is secured end-to-end with NIST-selected post-quantum algorithms — Dilithium3 for signatures and Kyber1024 for key encapsulation — making TRISPI resilient against quantum adversaries. Smart contracts execute on a dual EVM + WASM runtime, supporting both Solidity and CosmWasm ecosystems.</p>
+    <div class="metrics">
+      <div class="metric"><div class="metric-val">15s</div><div class="metric-lbl">Block Time</div></div>
+      <div class="metric"><div class="metric-val">7878</div><div class="metric-lbl">Chain ID</div></div>
+      <div class="metric"><div class="metric-val">50M</div><div class="metric-lbl">TRP Supply</div></div>
+      <div class="metric"><div class="metric-val">97%</div><div class="metric-lbl">AI Accuracy</div></div>
+      <div class="metric"><div class="metric-val">Kyber1024</div><div class="metric-lbl">PQC Scheme</div></div>
+      <div class="metric"><div class="metric-val">EVM+WASM</div><div class="metric-lbl">Runtimes</div></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ INTRO ══ -->
+  <section class="section" id="intro">
+    <div class="section-num">§ 02</div>
+    <h2>Introduction &amp; Vision</h2>
+    <p class="lead">The Web3 era demonstrated that decentralised computation is viable at scale — but the consensus mechanisms that underpinned it consumed enormous energy while contributing no useful work to the world.</p>
+
+    <h3>2.1  The Problem with Existing Consensus</h3>
+    <p>Bitcoin's Proof of Work burns electricity to solve arbitrary hash puzzles. Ethereum's Proof of Stake requires capital lockup, concentrating power among wealthy validators. Neither mechanism produces useful intelligence — the compute is spent entirely on the consensus game itself.</p>
+    <div class="box info">
+      <div class="box-title">The AI Opportunity</div>
+      TRISPI redirects this computational effort toward training and running distributed AI models. Every CPU and GPU cycle spent validating TRISPI transactions also advances the collective machine intelligence of the network.
+    </div>
+
+    <h3>2.2  Web4 — The Autonomous Layer</h3>
+    <p>TRISPI defines Web4 as the layer where:</p>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.2;">
+      <li>AI agents autonomously validate transactions and score blocks</li>
+      <li>Smart contracts detect and repair their own vulnerabilities</li>
+      <li>Network topology self-optimises based on real-time trust scoring</li>
+      <li>Users contribute compute and earn proportional rewards in TRP</li>
+    </ul>
+
+    <h3>2.3  Design Principles</h3>
+    <table>
+      <thead><tr><th>Principle</th><th>Implementation</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Useful Consensus</strong></td><td>PoI AI scoring replaces hash computation — every cycle trains real models</td></tr>
+        <tr><td><strong>Quantum Resilience</strong></td><td>Dilithium3 + Kyber1024 (NIST PQC) for all signatures and key exchange</td></tr>
+        <tr><td><strong>Decentralised Intelligence</strong></td><td>Federated Learning — models train locally, only gradients are shared</td></tr>
+        <tr><td><strong>EVM Compatibility</strong></td><td>Drop-in Solidity + CosmWasm support via dual runtime</td></tr>
+        <tr><td><strong>Fair Rewards</strong></td><td>Energy providers earn TRP by contributing CPU/GPU compute</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ ARCHITECTURE ══ -->
+  <section class="section" id="architecture">
+    <div class="section-num">§ 03</div>
+    <h2>System Architecture</h2>
+    <p class="lead">TRISPI is built as a layered, polyglot system: a Python AI service orchestrates consensus intelligence, a Go node handles P2P networking and block production, and a Rust core provides post-quantum cryptography and VM execution.</p>
+
+    <div class="arch">
+<span class="hl">  Browser / Wallet / dApp</span>
+           │  HTTPS / WSS
+           ▼
+  <span class="green">┌─────────────────────────────────────────────┐</span>
+  <span class="green">│         React Frontend (port 5000)          │</span>
+  <span class="green">│     Wallet · Explorer · Build &amp; Deploy      │</span>
+  <span class="green">└────────────────┬────────────────────────────┘</span>
+                   │  /api/* proxy
+           ┌───────▼────────┐
+           │                │
+  <span class="blue">┌──────────▼───────┐  ┌─────▼──────────────────┐</span>
+  <span class="blue">│ Python AI Service│  │  Python AI Service     │</span>
+  <span class="blue">│   port 8000      │  │   port 8001 (full AI)  │</span>
+  <span class="blue">│  (fast gateway)  │  │  PoI · FL · Governance │</span>
+  <span class="blue">└──────────┬───────┘  └─────┬──────────────────┘</span>
+            │                 │
+  <span class="hl">┌──────────▼─────────────────▼──────────────────┐</span>
+  <span class="hl">│           Go Consensus Node                   │</span>
+  <span class="hl">│   HTTP :8181   P2P (libp2p) :50052            │</span>
+  <span class="hl">│   PBFT · libp2p DHT · Block Production        │</span>
+  <span class="hl">└──────────────────────┬────────────────────────┘</span>
+                         │  TCP
+  <span class="green">┌────────────────────────▼──────────────────────┐</span>
+  <span class="green">│           Rust Core Bridge                    │</span>
+  <span class="green">│   port 6000  EVM + WASM + PQC (Dilithium3)    │</span>
+  <span class="green">└───────────────────────────────────────────────┘</span>
+    </div>
+
+    <h3>3.1  Component Responsibilities</h3>
+    <table>
+      <thead><tr><th>Component</th><th>Language</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>Python Fast Gateway</td><td>Python 3.11 / FastAPI</td><td>Sub-2s startup, state derive, PoI scoring, block callbacks, chain sync API</td></tr>
+        <tr><td>Python AI Service</td><td>Python 3.11 / FastAPI</td><td>Full AI consensus, FL aggregation, fraud detection, governance, GraphQL</td></tr>
+        <tr><td>Go Consensus Node</td><td>Go 1.21</td><td>Block production (~15s), PBFT consensus, libp2p DHT, LevelDB chain store</td></tr>
+        <tr><td>Rust Core Bridge</td><td>Rust / tokio</td><td>Dilithium3/Kyber1024 PQC, EVM execution, WASM runtime, state MPT</td></tr>
+        <tr><td>React Frontend</td><td>TypeScript / React 19</td><td>Wallet, explorer, governance UI, energy provider dashboard</td></tr>
+        <tr><td>PostgreSQL</td><td>—</td><td>Persistent account state (1,044+ accounts), tokenomics, FL reputation</td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.2  Chain Sync Protocol</h3>
+    <p>New nodes bootstrapping from the network use a 5-step verified sync:</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-content"><h4>Snapshot</h4><p>GET <code>/api/chain/snapshot</code> — receive network metadata, bootstrap nodes, block height, state root hash.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-content"><h4>Genesis State</h4><p>GET <code>/api/chain/genesis-state</code> — download all 1,044+ live account balances as the initial state.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-content"><h4>Cryptographic Verification</h4><p>Compute <code>sha256(sorted_balances)</code> and verify it matches the <code>state_root</code> from step 1. Reject if tampered.</p></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-content"><h4>Block Download</h4><p>GET <code>/api/chain/blocks?from_height={h}&amp;limit=500</code> — paginate through canonical blocks.</p></div></div>
+      <div class="step"><div class="step-num">5</div><div class="step-content"><h4>Peer Discovery</h4><p>GET <code>/api/chain/peers</code> — receive peer list for libp2p DHT bootstrapping and gossip.</p></div></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ POI ══ -->
+  <section class="section" id="poi">
+    <div class="section-num">§ 04</div>
+    <h2>Proof of Intelligence (PoI)</h2>
+    <p class="lead">Proof of Intelligence replaces hash-grinding with local AI inference. Each block is scored by every participating validator using an identical 4-feature weighted model. The consensus score is the trust-weighted median across all validators.</p>
+
+    <h3>4.1  Scoring Algorithm</h3>
+    <p>The PoI model is a deterministic weighted dot product over four block features:</p>
+
+    <div class="formula">
+      score = 0.30·tx_quality + 0.25·timing + 0.25·network_health + 0.20·has_proof
+    </div>
+
+    <table>
+      <thead><tr><th>Feature</th><th>Weight</th><th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td><code>tx_quality</code></td><td>0.30</td><td>min(1.0, tx_count / 10) — normalised transaction volume</td></tr>
+        <tr><td><code>timing</code></td><td>0.25</td><td>1 − |elapsed − block_interval| / block_interval — block arrived on schedule</td></tr>
+        <tr><td><code>network_health</code></td><td>0.25</td><td>min(1.0, peers / 10) — peer count health</td></tr>
+        <tr><td><code>has_proof</code></td><td>0.20</td><td>1.0 if AI proof present, else 0.5</td></tr>
+      </tbody>
+    </table>
+
+    <h3>4.2  Multi-Validator Consensus</h3>
+    <p>External energy provider nodes run the same scoring model locally and submit their score to <code>POST /api/validators/submit-score</code>. The server collects all scores for a block and computes a trust-weighted median:</p>
+    <div class="formula">
+      consensus_score = Σ(score_i × trust_i) / Σ(trust_i)
+    </div>
+    <p>A validator's <strong>trust weight</strong> (0.10–1.00) updates after each block:</p>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.2;">
+      <li>Honest score (within 0.25 of median): trust × 1.02 (cap 1.00)</li>
+      <li>Dishonest score: trust × 0.95 (floor 0.10)</li>
+      <li>Trust below 0.30: validator excluded from consensus &amp; earns no TRP</li>
+    </ul>
+
+    <h3>4.3  Validator Rewards</h3>
+    <p>Validators earning TRP per accepted block score:</p>
+    <div class="formula">reward = 0.10 × trust_weight  TRP / block</div>
+    <p>Rewards are posted as signed transactions to the Go blockchain, verifiable on-chain by any node. Server-internal validators ("server_validator") track rewards internally only.</p>
+
+    <div class="box green">
+      <div class="box-title">Open Participation</div>
+      Anyone can run <code>trispi_energy_provider.py</code> to join as a PoI validator. The script generates a fresh Ed25519 keypair, registers with the network, and begins scoring blocks autonomously. No staking requirement (MIN_STAKE_TRP = 0).
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ PQC ══ -->
+  <section class="section" id="pqc">
+    <div class="section-num">§ 05</div>
+    <h2>Post-Quantum Cryptography</h2>
+    <p class="lead">All cryptographic primitives in TRISPI are quantum-resistant. Classical elliptic-curve algorithms are augmented — never replaced alone — with NIST-standardised post-quantum schemes.</p>
+
+    <h3>5.1  Signature Scheme — Dilithium3</h3>
+    <p>Every transaction requires a hybrid signature: a classical <strong>Ed25519</strong> signature for backwards compatibility with existing tooling, plus a <strong>Dilithium3</strong> (CRYSTALS-Dilithium, NIST Level 3) lattice-based signature for quantum resistance.</p>
+    <table>
+      <thead><tr><th>Property</th><th>Ed25519</th><th>Dilithium3</th></tr></thead>
+      <tbody>
+        <tr><td>Security assumption</td><td>Elliptic curve DLP</td><td>Module Learning With Errors (MLWE)</td></tr>
+        <tr><td>Public key size</td><td>32 bytes</td><td>1,952 bytes</td></tr>
+        <tr><td>Signature size</td><td>64 bytes</td><td>3,309 bytes</td></tr>
+        <tr><td>Security level</td><td>128-bit classical</td><td>128-bit post-quantum (NIST L3)</td></tr>
+        <tr><td>Quantum safe</td><td>No (Shor's algorithm)</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+
+    <h3>5.2  Key Encapsulation — Kyber1024</h3>
+    <p>Node-to-node encrypted channels use <strong>Kyber1024</strong> (CRYSTALS-Kyber, NIST Level 5) for key encapsulation. Each Go consensus node establishes a Kyber session key with the Python service on startup:</p>
+    <pre><span class="comment"># Python registers with Go, installing a Kyber channel key</span>
+<span class="kw">POST</span> /api/internal/register-service
+{
+  <span class="str">"ed25519_pub"</span>:   <span class="str">"35486892c90ab65b…"</span>,
+  <span class="str">"dilithium3_pub"</span>: <span class="str">"414c2e23b611dae1…"</span>,
+  <span class="str">"kyber1024_pub"</span>:  <span class="str">"6074d570…"</span>,
+  <span class="str">"address"</span>:        <span class="str">"trp18424f99c7…"</span>
+}</pre>
+
+    <h3>5.3  Gradient Encryption — AES-256-GCM</h3>
+    <p>Federated Learning gradients are encrypted before submission. Each provider derives a per-round AES-256-GCM key from its public key and the round ID:</p>
+    <div class="formula">
+      round_nonce = sha3_256(f"{round_id}|{provider_id}")<br>
+      aes_key = sha3_256(pubkey_bytes || round_nonce)
+    </div>
+
+    <h3>5.4  Address Derivation</h3>
+    <p>TRISPI addresses are derived from the sha3-256 hash of the Ed25519 public key:</p>
+    <div class="formula">address = "trp1" + sha3_256(pubkey)[0:20].hex()</div>
+    <p>The 40-character hex suffix (160-bit) provides the same address space as Ethereum, ensuring compatibility with EVM tooling while maintaining the <code>trp1</code> prefix for human readability.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ FL ══ -->
+  <section class="section" id="fl">
+    <div class="section-num">§ 06</div>
+    <h2>Federated Learning &amp; Decentralised AI</h2>
+    <p class="lead">TRISPI implements on-chain Federated Learning: AI models are trained across distributed nodes without any raw data leaving the device. Only encrypted gradients are shared, and the aggregation result is committed to the blockchain as a verifiable commitment.</p>
+
+    <h3>6.1  Training Architecture</h3>
+    <p>The core model is a 2-layer fraud-detection network with 4 input features:</p>
+    <pre><span class="comment"># Network: Input(4) → Hidden(8, ReLU) → Output(2, sigmoid)</span>
+<span class="comment"># Features: [amount_norm, is_large_tx, is_round_amount, tx_velocity]</span>
+<span class="comment"># Labels:   [fraud_probability, trust_score]</span>
+
+<span class="kw">def</span> compute_gradient(txs):
+    seed = <span class="kw">int</span>(time.time()) // <span class="num">60</span>   <span class="comment"># minute-aligned seed</span>
+    rng  = np.random.RandomState(seed)
+    <span class="comment"># … mini-batch SGD, lr=0.01 …</span>
+    <span class="kw">return</span> {<span class="str">"W1"</span>: …, <span class="str">"b1"</span>: …, <span class="str">"W2"</span>: …, <span class="str">"b2"</span>: …}</pre>
+
+    <h3>6.2  Round Lifecycle</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-content"><h4>Round Opens</h4><p>Every block triggers a new FL round. Providers poll <code>GET /api/federated/round-status</code>.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-content"><h4>Local Training</h4><p>Each provider trains on its own local transaction data. No raw data is shared.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-content"><h4>Gradient Encryption</h4><p>Gradients are encrypted with the provider's AES-256-GCM per-round key before transmission.</p></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-content"><h4>Submission</h4><p><code>POST /api/federated/submit-gradient</code> — signed with Ed25519, includes gradient hash for integrity.</p></div></div>
+      <div class="step"><div class="step-num">5</div><div class="step-content"><h4>Aggregation &amp; Commitment</h4><p>Server aggregates accepted gradients (FedAvg) and posts <code>commitment_hash = sha3_256(aggregation_result)</code> as a signed on-chain transaction.</p></div></div>
+      <div class="step"><div class="step-num">6</div><div class="step-content"><h4>Verification</h4><p>Anyone can verify <code>GET /api/federated/verify-round/{round_id}</code> to confirm the aggregation was honest.</p></div></div>
+    </div>
+
+    <h3>6.3  Provider Rewards</h3>
+    <p>Accepted gradients earn <strong>1.00 TRP per round</strong>. The FL reputation system tracks each provider's acceptance rate — providers with low quality gradients are rate-limited from future rounds.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ RUNTIME ══ -->
+  <section class="section" id="runtime">
+    <div class="section-num">§ 07</div>
+    <h2>EVM + WASM Dual Runtime</h2>
+    <p class="lead">TRISPI's Rust Core Bridge provides a unified execution environment for both Solidity (EVM) and CosmWasm (WASM) smart contracts. Developers can deploy existing Ethereum contracts without modification.</p>
+
+    <h3>7.1  EVM Compatibility</h3>
+    <p>The EVM interpreter in the Rust core is compatible with the Ethereum Yellow Paper, supporting the full EIP-1559 transaction model. Existing Solidity contracts compile and deploy directly. MetaMask connects using Chain ID <code>7878</code>.</p>
+
+    <h3>7.2  WASM Runtime</h3>
+    <p>CosmWasm contracts execute in a sandboxed WASM environment. The Rust runtime enforces gas metering, memory limits, and deterministic execution across all validator nodes.</p>
+
+    <h3>7.3  AI-Augmented Contract Security</h3>
+    <p>The Python AI service continuously monitors deployed contracts with an AI auditor, flagging:</p>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.2;">
+      <li>Reentrancy vulnerabilities (pattern matching + semantic analysis)</li>
+      <li>Integer overflow / underflow risks</li>
+      <li>Unreachable selfdestruct paths</li>
+      <li>Unusual gas consumption patterns (anomaly detection)</li>
+    </ul>
+    <div class="box warn">
+      <div class="box-title">Self-Healing Contracts</div>
+      When the AI auditor detects a critical vulnerability in a contract, it can trigger an on-chain governance proposal to pause or upgrade the contract automatically — without requiring manual intervention from the developer.
+    </div>
+
+    <h3>7.4  Hybrid Bridge</h3>
+    <p>The Rust Core Bridge arbitrates cross-runtime calls, allowing Solidity contracts to call CosmWasm modules and vice versa. State is stored in a unified Merkle Patricia Trie shared between both runtimes.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ TOKENOMICS ══ -->
+  <section class="section" id="tokenomics">
+    <div class="section-num">§ 08</div>
+    <h2>TRP Tokenomics</h2>
+    <p class="lead">The TRP (TRISPI) token powers every economic primitive on the network: transaction fees, validator rewards, governance voting, and energy provider compensation.</p>
+
+    <h3>8.1  Supply Schedule</h3>
+    <table>
+      <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Total Supply</td><td>50,000,000 TRP</td></tr>
+        <tr><td>Founder Allocation</td><td>30,000,000 TRP (60%)</td></tr>
+        <tr><td>Network Rewards Pool</td><td>15,000,000 TRP (30%)</td></tr>
+        <tr><td>Ecosystem Fund</td><td>5,000,000 TRP (10%)</td></tr>
+        <tr><td>Initial Base Fee</td><td>0.0057 TRP / gas unit</td></tr>
+        <tr><td>Halving Schedule</td><td>Bitcoin-style, every 210,000 blocks</td></tr>
+      </tbody>
+    </table>
+
+    <h3>8.2  EIP-1559 Fee Model</h3>
+    <p>TRISPI implements EIP-1559 with an AI-optimised base fee adjustment algorithm:</p>
+    <div class="formula">
+      base_fee_next = base_fee × (1 + 0.125 × (block_gas − target_gas) / target_gas)
+    </div>
+    <p>The AI Gas Optimizer predicts network demand using historical block fullness and adjusts the target gas accordingly, smoothing fee volatility.</p>
+
+    <h3>8.3  Burn Mechanism</h3>
+    <p>70% of every base fee is burned, permanently reducing the circulating supply. The remaining 30% is distributed to the block proposer. Combined with the halving schedule, this creates deflationary pressure as network adoption grows.</p>
+
+    <h3>8.4  Energy Provider Economics</h3>
+    <table>
+      <thead><tr><th>Activity</th><th>Reward</th><th>Frequency</th></tr></thead>
+      <tbody>
+        <tr><td>PoI block scoring (accepted)</td><td>0.10 × trust_weight TRP</td><td>~every 15 seconds</td></tr>
+        <tr><td>FL gradient (accepted)</td><td>1.00 TRP</td><td>~every 30 seconds</td></tr>
+        <tr><td>TX verdict (accepted)</td><td>0.01 TRP</td><td>~every 5 seconds</td></tr>
+        <tr><td>Block proposal</td><td>30% of base fee × gas_used</td><td>~every 15 seconds</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ NETWORK ══ -->
+  <section class="section" id="network">
+    <div class="section-num">§ 09</div>
+    <h2>Network &amp; P2P Layer</h2>
+    <p class="lead">TRISPI's networking layer is built on libp2p, the same battle-tested P2P library used by IPFS and Ethereum 2.0, extended with TRISPI-specific gossip protocols for PoI scores and FL gradient commitments.</p>
+
+    <h3>9.1  libp2p Stack</h3>
+    <table>
+      <thead><tr><th>Component</th><th>Protocol</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Peer Discovery</td><td>Kademlia DHT</td><td>Find other TRISPI nodes globally</td></tr>
+        <tr><td>Transport</td><td>TCP + QUIC</td><td>Reliable + low-latency data transfer</td></tr>
+        <tr><td>Multiplexing</td><td>yamux</td><td>Multiple concurrent streams per connection</td></tr>
+        <tr><td>Security</td><td>Noise Protocol</td><td>Encrypted + authenticated channels</td></tr>
+        <tr><td>Gossip</td><td>GossipSub</td><td>Block announcements + PoI score propagation</td></tr>
+      </tbody>
+    </table>
+
+    <h3>9.2  Peer Scoring</h3>
+    <p>Every peer is assigned a trust score by the AI network intelligence module, based on:</p>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.2;">
+      <li>Block propagation latency (fast peers score higher)</li>
+      <li>Transaction validity rate (peers relaying invalid txs score lower)</li>
+      <li>PoI score accuracy (consistent vs. outlier scorers)</li>
+      <li>Uptime and responsiveness</li>
+    </ul>
+    <p>Peers whose trust score falls below 0.30 are deprioritised for block relay and eventually disconnected. This Sybil-resistance mechanism prevents dishonest nodes from influencing consensus.</p>
+
+    <h3>9.3  Port Layout</h3>
+    <table>
+      <thead><tr><th>Port</th><th>Service</th><th>Protocol</th></tr></thead>
+      <tbody>
+        <tr><td>5000</td><td>React Frontend</td><td>HTTP</td></tr>
+        <tr><td>8000</td><td>Python Fast Gateway</td><td>HTTP (FastAPI)</td></tr>
+        <tr><td>8001</td><td>Python Full AI Service</td><td>HTTP (FastAPI)</td></tr>
+        <tr><td>8181</td><td>Go Consensus HTTP API</td><td>HTTP</td></tr>
+        <tr><td>50051</td><td>Go Legacy TCP P2P</td><td>TCP</td></tr>
+        <tr><td>50052</td><td>Go libp2p P2P</td><td>TCP / QUIC</td></tr>
+        <tr><td>6000</td><td>Rust Core Bridge</td><td>TCP</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ SECURITY ══ -->
+  <section class="section" id="security">
+    <div class="section-num">§ 10</div>
+    <h2>Security Model</h2>
+    <p class="lead">TRISPI's security model is defence-in-depth: cryptographic guarantees at the transaction layer, AI-driven anomaly detection at the application layer, and trust-weighted consensus at the network layer.</p>
+
+    <h3>10.1  Byzantine Fault Tolerance</h3>
+    <p>The Go consensus node implements PBFT (Practical Byzantine Fault Tolerance), tolerating up to <em>f</em> malicious nodes in a network of <em>3f + 1</em> total nodes. Combined with PoI trust scoring, it is economically irrational for validators to submit dishonest scores — their trust weight decays rapidly (×0.95 per dishonest score) until they are excluded.</p>
+
+    <h3>10.2  Anti-Poisoning in Federated Learning</h3>
+    <p>The FL aggregation layer employs Byzantine-robust aggregation rules:</p>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.2;">
+      <li><strong>Gradient norm clipping</strong> — gradients with L2 norm &gt; threshold are rejected</li>
+      <li><strong>Cosine similarity filter</strong> — gradients diverging significantly from the server's own gradient are flagged</li>
+      <li><strong>Reputation-weighted aggregation</strong> — FL reputation score weights each gradient's influence in FedAvg</li>
+      <li><strong>On-chain commitment</strong> — aggregation hash committed on-chain ensures aggregation cannot be silently altered</li>
+    </ul>
+
+    <h3>10.3  State Integrity</h3>
+    <p>The blockchain state is protected by a Merkle Patricia Trie (MPT) rooted at each block's <code>state_root</code>. The Python service derives the state root as:</p>
+    <div class="formula">
+      state_root = sha3_256(prev_state_root_bytes || sorted_tx_bytes)
+    </div>
+    <p>An AI state-integrity guard runs every 30 seconds, verifying the MPT root against the PostgreSQL account balances. Tampering with the account state causes an immediate integrity alert and state rollback.</p>
+
+    <h3>10.4  Quantum Threat Model</h3>
+    <div class="box info">
+      <div class="box-title">Harvest Now, Decrypt Later</div>
+      A quantum adversary today could record all encrypted traffic and decrypt it retroactively once a sufficiently powerful quantum computer exists. TRISPI's Kyber1024 KEM provides <strong>forward secrecy</strong> at post-quantum security levels, neutralising this attack vector.
+    </div>
+    <p>Shor's algorithm can break Ed25519 on a sufficiently large quantum computer. The Dilithium3 hybrid signature ensures that even if Ed25519 is broken, every transaction and block remains cryptographically valid through the lattice-based signature.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ ROADMAP ══ -->
+  <section class="section" id="roadmap">
+    <div class="section-num">§ 11</div>
+    <h2>Roadmap</h2>
+
+    <h3>Phase 1 — Foundation (Complete)</h3>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.4;">
+      <li>✅ Go consensus node with PBFT + libp2p</li>
+      <li>✅ Python AI service with PoI consensus engine</li>
+      <li>✅ Rust PQC bridge (Dilithium3 + Kyber1024)</li>
+      <li>✅ EVM + WASM dual runtime</li>
+      <li>✅ EIP-1559 tokenomics with 70% burn</li>
+      <li>✅ PostgreSQL persistent state (1,044+ accounts)</li>
+      <li>✅ React 19 frontend with wallet + explorer</li>
+    </ul>
+
+    <h3>Phase 2 — Decentralisation (Current)</h3>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.4;">
+      <li>✅ External PoI validator registration (<code>/api/validators/register</code>)</li>
+      <li>✅ Federated Learning with on-chain commitment verification</li>
+      <li>✅ Chain sync API for new node bootstrapping</li>
+      <li>✅ <code>trispi_energy_provider.py</code> — one-file participation client</li>
+      <li>✅ Docker full-node infrastructure</li>
+      <li>🔄 Public validator leaderboard</li>
+      <li>🔄 Multi-node testnet (target: 50 external validators)</li>
+    </ul>
+
+    <h3>Phase 3 — Ecosystem (Q3 2026)</h3>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.4;">
+      <li>🔲 TRP DEX (on-chain automated market maker)</li>
+      <li>🔲 NFT standard with AI-generated metadata</li>
+      <li>🔲 Cross-chain bridge (Ethereum ↔ TRISPI)</li>
+      <li>🔲 Mobile energy provider app (iOS + Android)</li>
+      <li>🔲 Governance DAO with on-chain voting</li>
+    </ul>
+
+    <h3>Phase 4 — Scale (Q4 2026)</h3>
+    <ul style="margin: 0 0 18px 24px; line-height: 2.4;">
+      <li>🔲 Layer-2 rollup support</li>
+      <li>🔲 100+ validator network</li>
+      <li>🔲 Institutional energy provider partnerships</li>
+      <li>🔲 Hardware security module (HSM) integration for key management</li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ══ CONCLUSION ══ -->
+  <section class="section" id="conclusion">
+    <div class="section-num">§ 12</div>
+    <h2>Conclusion</h2>
+    <p class="lead">TRISPI demonstrates that blockchain consensus and useful AI computation are not in conflict — they are mutually reinforcing. Every cycle spent validating TRISPI transactions advances the collective intelligence of the network.</p>
+    <p>By combining Proof of Intelligence with post-quantum cryptography, federated learning, and a dual EVM+WASM runtime, TRISPI offers a complete Web4 platform that is quantum-safe, energy-purposeful, and open to participation by anyone with a computer.</p>
+    <p>The protocol is live on mainnet (Chain ID 7878). Anyone can join as an energy provider today by running:</p>
+    <pre>git clone https://github.com/TRISPIAINETWORK/TRISPI.git
+pip install cryptography numpy requests
+python trispi/trispi_energy_provider.py \
+  --node https://fffgfggffff.replit.app</pre>
+    <p>We invite researchers, developers, and compute providers to join the network, validate blocks, contribute gradients, and earn TRP — while collectively building the most intelligent decentralised network ever created.</p>
+
+    <div class="box green">
+      <div class="box-title">Join the Network</div>
+      <strong>GitHub:</strong> <a href="https://github.com/TRISPIAINETWORK/TRISPI">github.com/TRISPIAINETWORK/TRISPI</a><br>
+      <strong>Live App:</strong> <a href="/">fffgfggffff.replit.app</a><br>
+      <strong>Chain ID:</strong> 7878 &nbsp;|&nbsp; <strong>TRP Token</strong> &nbsp;|&nbsp; <strong>PoI Consensus</strong>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div>TRISPI Technical Whitepaper v3.0 — May 2026</div>
+  <div>Chain ID 7878 &nbsp;·&nbsp; TRP Token &nbsp;·&nbsp; Proof of Intelligence</div>
+  <div style="margin-top:8px">
+    <a href="https://github.com/TRISPIAINETWORK/TRISPI">GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="/">Back to App</a>
+  </div>
+</footer>
+
+</body>
+</html>
