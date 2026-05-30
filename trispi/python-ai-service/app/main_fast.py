@@ -274,6 +274,8 @@ async def _init_pg() -> None:
             print(f"[fast] FL v2 reputation loaded: {len(fl_records)} providers")
         # Start background block sync every 30 s
         asyncio.create_task(_pg_sync_loop())
+        # Push any PG-persisted blocks back to Go so chain height survives restarts
+        asyncio.create_task(_startup_push_pg_blocks_to_go())
 
 
 async def _pg_sync_loop() -> None:
@@ -286,6 +288,108 @@ async def _pg_sync_loop() -> None:
         except Exception as e:
             print(f"[fast] pg_sync_loop error: {e}")
         await asyncio.sleep(30)
+
+
+async def _startup_push_pg_blocks_to_go() -> None:
+    """
+    On startup, push any PostgreSQL-persisted blocks back to the Go node so it
+    catches up to the last saved height rather than starting fresh from the JSON
+    snapshot (trispi_chain.json).
+
+    Flow:
+      1. Wait for Go to become healthy (up to 60 s).
+      2. Query Go's current chain height.
+      3. Fetch PG blocks above that height (raw_json column = original Go format).
+      4. POST each block to Go /blocks/sync in index order.
+
+    This makes the chain persistent across restarts without requiring a restart
+    of the ordering: Go starts from the JSON snapshot, Python catches it up via
+    /blocks/sync, then both continue from the latest persisted height.
+    """
+    if not _pg:
+        return
+
+    # 1. Wait for Go to be healthy
+    for _ in range(60):
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as c:
+                r = await c.get(f"{_GO_URL}/health")
+                if r.status_code == 200:
+                    break
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+    else:
+        print("[fast] startup_push: Go not ready — chain sync skipped")
+        return
+
+    # Small additional settle so Go finishes loading the JSON snapshot
+    await asyncio.sleep(3)
+
+    # 2. Get Go's current height
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.get(f"{_GO_URL}/network/stats")
+            stats = r.json() if r.status_code == 200 else {}
+    except Exception:
+        stats = {}
+    go_height = int(stats.get("total_blocks", 0) or 0)
+    if go_height < 1:
+        return
+
+    # 3. Fetch PG blocks above Go's current head (batch of up to 2000)
+    if not _pg._pool:
+        return
+    try:
+        async with _pg._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT block_index, raw_json
+                FROM trispi_blocks
+                WHERE block_index > $1
+                  AND raw_json IS NOT NULL
+                  AND LENGTH(hash) > 20
+                ORDER BY block_index ASC
+                LIMIT 2000
+                """,
+                go_height,
+            )
+    except Exception as e:
+        print(f"[fast] startup_push: PG query failed: {e}")
+        return
+
+    if not rows:
+        print(f"[fast] startup_push: Go at #{go_height}, PG has no newer blocks")
+        return
+
+    print(f"[fast] startup_push: Go at #{go_height}, pushing {len(rows)} PG block(s)…")
+
+    # 4. Push each block to Go /blocks/sync
+    pushed = 0
+    errors = 0
+    async with httpx.AsyncClient(timeout=5.0) as c:
+        for row in rows:
+            try:
+                block_json = row["raw_json"]
+                if isinstance(block_json, str):
+                    block_data = json.loads(block_json)
+                else:
+                    block_data = block_json  # asyncpg returns dict for JSONB
+
+                r = await c.post(f"{_GO_URL}/blocks/sync", json=block_data)
+                if r.status_code == 200:
+                    result = r.json()
+                    if result.get("accepted"):
+                        pushed += 1
+                else:
+                    errors += 1
+            except Exception:
+                errors += 1
+            # Small delay to avoid flooding Go during block production
+            await asyncio.sleep(0.02)
+
+    print(f"[fast] startup_push: done — pushed={pushed} errors={errors} "
+          f"(Go now at ~#{go_height + pushed})")
 
 
 async def _init_rust_kyber_session() -> None:
@@ -3066,7 +3170,12 @@ async def chain_node_info():
         "go_port":        8181,
         "rust_port":      6000,
         "public_api":     f"https://{primary_host}",
+        "bootstrap_url":  f"https://{primary_host}",
         "p2p_multiaddr":  f"/dns4/{primary_host}/tcp/50052/p2p/12D3KooWEYVwoztgTfwXDob7VVZfY4cuVFCP6g7Fe7p4eWkaAXaa",
+        "bootstrap_instructions": (
+            f"./trispi-consensus -bootstrap https://{primary_host} "
+            f"-id <your-node-id> -http 8182 -libp2p-port 50053"
+        ),
         "services": {
             "go_consensus": True,
             "python_ai":    True,
@@ -3076,6 +3185,77 @@ async def chain_node_info():
         },
         "timestamp": time.time(),
     }
+
+
+# ── P2P block sync proxy ───────────────────────────────────────────────────────
+# Expose Go's block-sync API through the HTTPS proxy so external Go nodes can
+# bootstrap directly from the mainnet:
+#   ./trispi-consensus -bootstrap https://<mainnet-domain>
+#
+# Go's SyncFromPeer calls:
+#   GET  {bootstrapURL}/api/p2p/bootstrap        — fetch remote head + peer info
+#   POST {bootstrapURL}/api/p2p/bootstrap        — register as peer
+#   GET  {bootstrapURL}/api/p2p/blocks/range     — fetch blocks in batches of 100
+#
+# These proxy endpoints forward all calls to the local Go node at :8181.
+
+@app.get("/api/p2p/bootstrap")
+async def p2p_bootstrap_get(request: Request):
+    """Proxy: Go SyncFromPeer fetches chain head + libp2p addrs from here on bootstrap."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get(f"{_GO_URL}/api/p2p/bootstrap")
+            return JSONResponse(content=r.json(), status_code=r.status_code)
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc), "go_reachable": False})
+
+
+@app.post("/api/p2p/bootstrap")
+async def p2p_bootstrap_post(request: Request):
+    """Proxy: peer announces itself to the bootstrap node."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.post(f"{_GO_URL}/api/p2p/bootstrap", json=body)
+            return JSONResponse(content=r.json(), status_code=r.status_code)
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+
+
+@app.get("/api/p2p/blocks/range")
+async def p2p_blocks_range(request: Request):
+    """
+    Proxy: Go SyncFromPeer fetches blocks in batches of 100 using this endpoint.
+
+    External nodes can bootstrap the full chain history with:
+        GET /api/p2p/blocks/range?from=0&to=99
+        GET /api/p2p/blocks/range?from=100&to=199
+        ...
+
+    Hard cap: 100 blocks per call (enforced by Go).
+    """
+    qs = request.url.query
+    url = f"{_GO_URL}/api/p2p/blocks/range" + (f"?{qs}" if qs else "")
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            r = await c.get(url)
+            return JSONResponse(content=r.json(), status_code=r.status_code)
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
+
+
+@app.get("/api/p2p/peers")
+async def p2p_peers_proxy(request: Request):
+    """Proxy: returns the list of known P2P peers (libp2p + HTTP)."""
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as c:
+            r = await c.get(f"{_GO_URL}/api/p2p/peers")
+            return JSONResponse(content=r.json(), status_code=r.status_code)
+    except Exception as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc)})
 
 
 # ── Catch-all: forward to full backend or 503 ─────────────────────────────────

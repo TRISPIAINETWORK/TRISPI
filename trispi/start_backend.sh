@@ -27,13 +27,27 @@ for port in 8181 8000; do
 done
 sleep 1
 
-# ── [1/2] Go Consensus Node (HTTP :8181, P2P :50051) ──
-echo "[1/2] Starting Go Consensus Node (HTTP :8181, P2P :50051)..."
+# ── [1/2] Go Consensus Node (HTTP :8181, P2P :50052) ──
+echo "[1/2] Starting Go Consensus Node (HTTP :8181, P2P :50052)..."
 cd go-consensus
 chmod +x trispi-consensus 2>/dev/null || true
+
+# Optional bootstrap: set TRISPI_BOOTSTRAP=https://<mainnet-node> so this node
+# syncs the full chain from the mainnet on startup instead of starting from the
+# local JSON snapshot.  Example:
+#   TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app bash start_backend.sh
+#
+# The mainnet node itself does NOT set TRISPI_BOOTSTRAP — it IS the bootstrap source.
+BOOTSTRAP_FLAGS=""
+if [ -n "${TRISPI_BOOTSTRAP:-}" ]; then
+  BOOTSTRAP_FLAGS="-bootstrap $TRISPI_BOOTSTRAP"
+  echo "[bootstrap] Chain will sync from: $TRISPI_BOOTSTRAP"
+fi
+
 BLOCK_MINED_SECRET="$BLOCK_MINED_SECRET" \
   TRISPI_ALLOW_FALLBACK_ROOTS=1 \
-  ./trispi-consensus -id node1 -http 8181 -port 50051 &
+  ./trispi-consensus -id node1 -http 8181 -port 50051 -libp2p-port 50052 \
+  $BOOTSTRAP_FLAGS &
 GO_PID=$!
 cd ..
 
