@@ -151,10 +151,16 @@ async def _post_tx_to_go(
             except Exception:
                 resp = {"http_status": r.status_code, "raw": r.text[:80]}
             if r.status_code >= 400:
-                logger.warning(f"[agents] Go /tx returned {r.status_code}: {resp}")
+                raw = str(resp.get("raw", "")).lower()
+                # "insufficient balance" is expected on fresh start (service key
+                # earns TRP over time via block rewards).  Log at DEBUG to avoid
+                # noise; other 4xx errors are genuine warnings.
+                if "insufficient balance" in raw or "insufficient_balance" in raw:
+                    logger.debug(f"[agents] Go /tx skipped (no balance yet): {resp}")
+                else:
+                    logger.warning(f"[agents] Go /tx returned {r.status_code}: {resp}")
                 # Return None on ANY non-2xx so callers can rely on `if result:`
                 # to mean "transaction was confirmed by Go", not merely "got a response".
-                # This prevents marking validators as rewarded on 4xx error responses.
                 return None
             return resp
     except Exception as exc:
