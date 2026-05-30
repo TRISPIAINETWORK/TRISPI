@@ -2,7 +2,7 @@
 
 > **Web4 · AI-Powered · Post-Quantum Secure · EVM + WASM**
 
-[![Website](https://img.shields.io/badge/Website-trispi.org-blue)](https://trispi.org)
+[![Website](https://img.shields.io/badge/Website-fffgfggffff.replit.app-blue)](https://fffgfggffff.replit.app)
 [![Telegram](https://img.shields.io/badge/Telegram-@trispiainetwork-26A5E4)](https://t.me/trispiainetwork)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
@@ -14,28 +14,13 @@ TRISPI is a next-generation **Web4 blockchain** where AI agents act as validator
 
 | Feature | Description |
 |---------|-------------|
-| **Proof of Intelligence (PoI)** | AI-based consensus — models validate every transaction |
+| **Proof of Intelligence (PoI)** | AI scores every block — models validate transactions with fraud detection |
 | **Post-Quantum Security** | Ed25519 + Dilithium3 (NIST PQC) + Kyber1024 hybrid |
 | **EVM + WASM** | Run Solidity and WebAssembly contracts on the same chain |
 | **Energy Provider System** | Earn TRP by contributing CPU/GPU compute to AI training |
-| **PBFT Consensus** | Byzantine-fault-tolerant, ~10 second block time |
+| **PBFT Consensus** | Byzantine-fault-tolerant, ~15 second block time |
 | **Chain ID 7878** | MetaMask / ethers.js / web3.js compatible |
 | **EIP-1559 Tokenomics** | Dynamic gas fees, 70% burn, Bitcoin-style halving |
-
----
-
-## Table of Contents
-
-1. [Network Details](#network-details)
-2. [Quick Start](#quick-start)
-3. [Add to MetaMask](#add-to-metamask)
-4. [Energy Provider — Earn TRP](#energy-provider--earn-trp)
-5. [Run a Full Node](#run-a-full-node)
-6. [Create a Blockchain on TRISPI](#create-a-blockchain-on-trispi)
-7. [Smart Contracts](#smart-contracts)
-8. [SDK & API](#sdk--api)
-9. [Repository Structure](#repository-structure)
-10. [Community](#community)
 
 ---
 
@@ -46,292 +31,244 @@ TRISPI is a next-generation **Web4 blockchain** where AI agents act as validator
 | Chain ID | `7878` |
 | Token Symbol | `TRP` |
 | Total Supply | `50,000,000 TRP` |
-| Block Time | `~10 seconds` |
+| Block Time | `~15 seconds` |
 | Consensus | `PoI + PBFT` |
 | Post-Quantum | `Ed25519 + Dilithium3 + Kyber1024` |
-| RPC Endpoint | `https://trispi.org/rpc` |
-| REST API | `https://trispi.org/api` |
-| Explorer | `https://trispi.org` |
-| Swagger Docs | `https://trispi.org/api/docs` |
+| **Mainnet URL** | `https://fffgfggffff.replit.app` |
+| REST API | `https://fffgfggffff.replit.app/api` |
+| Explorer | `https://fffgfggffff.replit.app` |
+| Swagger Docs | `https://fffgfggffff.replit.app/api/docs` |
+| **Bootstrap endpoint** | `GET https://fffgfggffff.replit.app/api/p2p/bootstrap` |
+| **P2P peer ID** | `12D3KooWPR3pFyevgAtZWHGiM4e1RBKQVVXLF3TRbKzT7dvHjjWH` |
 
 ---
 
-## Quick Start
+## Node Types — Choose Your Role
 
-### Option 1 — Energy Provider (earn TRP in 5 minutes)
+### 1. Energy Provider (Easiest — 2 minutes)
+> Python script only. No Docker, no Go. Earn TRP by scoring blocks and submitting FL gradients.
+
+**Requirements:** Python 3.9+, 1 GB RAM  
+**Earns:** TRP per block scored + FL gradient round reward
+
+```bash
+git clone https://github.com/TRISPIAINETWORK/TRISPI.git
+pip install requests numpy cryptography psutil
+
+# Connect to mainnet:
+python3 trispi/trispi_energy_provider.py \
+  --node https://fffgfggffff.replit.app \
+  --wallet trp1YOUR_ADDRESS
+
+# Or connect to your own full node:
+python3 trispi/trispi_energy_provider.py \
+  --node http://YOUR_SERVER:8000 \
+  --wallet trp1YOUR_ADDRESS
+```
+
+**How data reaches this node:**
+```
+Every 20s: GET /api/explorer/blocks  → get latest block hash
+           POST /api/poi/score-block → submit AI score → earn 0.1 TRP
+Every 30s: GET /api/federated/round-status → check FL round
+           POST /api/federated/submit-gradient → submit gradient → earn 1.0 TRP
+```
+
+---
+
+### 2. Validator Node (Full Stack — 10 minutes)
+> Python + Go + Rust. Participates in PBFT consensus, receives real-time P2P blocks, earns block rewards.
+
+**Requirements:** 4 CPU cores, 8 GB RAM, port 50052 open  
+**Earns:** 10 TRP block reward + priority fees
+
+```bash
+git clone https://github.com/TRISPIAINETWORK/TRISPI.git
+cd TRISPI/trispi
+
+# 1. Start Python AI Service (port 8000):
+cd python-ai-service
+pip install -r requirements.txt
+export TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app
+uvicorn app.main_fast:app --host 0.0.0.0 --port 8000 &
+
+# 2. Start Go Consensus Node (port 8181, P2P 50052):
+cd ../go-consensus
+./trispi-consensus \
+  -id my-validator-001 \
+  -http 8181 \
+  -libp2p-port 50052 \
+  -bootstrap https://fffgfggffff.replit.app &
+
+# 3. Register as validator:
+curl -X POST http://localhost:8000/api/validators/register \
+  -H "Content-Type: application/json" \
+  -d '{"validator_id":"my-validator-001","public_key":"YOUR_ED25519_PUBKEY_HEX","stake":1000.0}'
+```
+
+**How data reaches this node:**
+```
+Go startup:
+  GET  https://fffgfggffff.replit.app/api/p2p/bootstrap       → chain height, peer ID
+  GET  https://fffgfggffff.replit.app/api/p2p/blocks/range    → download 100 blocks/batch
+  ...repeat until synced to chain_height
+
+After sync (real-time P2P):
+  libp2p connects to 12D3KooWPR3pFyevgAtZWHGiM4e... (mainnet peer)
+  → receives new blocks every ~15 seconds via gossip protocol
+  → Go calls Python /api/poi/score-block for each block
+  → Python calls Rust /pqc/sign for Dilithium3 signature
+```
+
+**Open port 50052** so other nodes can peer with you:
+```bash
+sudo ufw allow 50052/tcp
+```
+
+---
+
+### 3. Full Node / Observer (No consensus — 5 minutes)
+> Full chain history in PostgreSQL. Serves API to wallets and dApps. No consensus participation.
+
+**Requirements:** 2 CPU cores, 4 GB RAM, 20 GB disk  
+**Role:** Serves /api/* to dApps, stores full chain history
+
+```bash
+git clone https://github.com/TRISPIAINETWORK/TRISPI.git
+cd TRISPI/trispi
+
+# Start Python AI Service with bootstrap sync:
+cd python-ai-service
+pip install -r requirements.txt
+export TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app
+export DATABASE_URL=postgresql://user:pass@localhost:5432/trispi
+
+# Python auto-syncs blocks from mainnet on startup:
+uvicorn app.main_fast:app --host 0.0.0.0 --port 8000
+
+# Your node now exposes the full TRISPI API:
+curl http://localhost:8000/api/network/status
+curl http://localhost:8000/api/explorer/blocks
+```
+
+**How data reaches this node:**
+```
+Python startup:
+  GET  https://fffgfggffff.replit.app/api/p2p/blocks/range  → sync blocks to PG
+  Stores all block data in postgresql → blocks, balances, proofs
+
+After sync:
+  Serves GET /api/explorer/blocks, /api/balance/*, /api/tokenomics
+  Energy providers and wallets connect to YOUR node
+  YOUR node is now part of the decentralized API layer
+```
+
+---
+
+## How Network Data Flows to Your Node
+
+```
+MAINNET (fffgfggffff.replit.app)
+│
+├─ GET /api/p2p/bootstrap          ← Any node calls this first
+│    returns: chain_height=9823, peer_id, libp2p_addrs[6]
+│
+├─ GET /api/p2p/blocks/range?from=X&to=Y   ← Bulk sync (100 blocks/batch)
+│    returns: {blocks:[...], head:9823}
+│
+├─ GET /api/chain/genesis-state    ← Account state snapshot
+│    returns: 1055 accounts with TRP balances
+│
+├─ GET /api/p2p/peers              ← Other nodes to connect to
+│    returns: connected Go peer IDs
+│
+└─ libp2p P2P :50052               ← Real-time block propagation
+     Go nodes receive new blocks instantly via gossip
+```
+
+### Verify bootstrap is working:
+```bash
+# Check mainnet is alive:
+curl https://fffgfggffff.replit.app/api/p2p/bootstrap | python3 -m json.tool
+
+# Sync first 100 blocks:
+curl "https://fffgfggffff.replit.app/api/p2p/blocks/range?from=0&to=100" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'blocks: {len(d[\"blocks\"])}, head: {d[\"head\"]}')"
+
+# Check network live stats:
+curl https://fffgfggffff.replit.app/api/network/status | python3 -m json.tool
+```
+
+---
+
+## Quick Start — One Command (Docker)
 
 ```bash
 git clone https://github.com/TRISPIAINETWORK/TRISPI.git
 cd TRISPI
-pip install requests psutil numpy
 
-# Run on CPU:
-python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS
+export TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app
 
-# Run with GPU (NVIDIA CUDA):
-python3 energy-provider/trispi_energy_provider.py --wallet trp1YOUR_ADDRESS --gpu
-```
+# Full node with Docker:
+bash join_trispi_network.sh
 
-### Option 2 — Run a Full Node
-
-```bash
-# Auto-join mainnet:
-python3 scripts/join-network.py --public-ip YOUR_SERVER_IP
-
-# With sync monitoring:
-python3 scripts/join-network.py --public-ip YOUR_SERVER_IP --monitor
-```
-
-### Option 3 — Docker (Recommended for Servers)
-
-```bash
-# Full TRISPI stack (Python AI + Go Consensus):
-docker-compose -f docker-compose.trispi.yml up -d
-
-# Single node only:
-docker-compose -f docker-compose.node.yml up -d
-
-# Check health:
-curl http://localhost:8000/health
+# After start, verify your node:
+curl http://localhost:8000/api/network/status
+curl http://localhost:8000/api/p2p/bootstrap
 ```
 
 ---
 
 ## Add to MetaMask
 
-1. Open MetaMask → **Add Network** → **Add a network manually**
-2. Fill in:
-
 | Field | Value |
 |-------|-------|
-| Network Name | `TRISPI Mainnet` |
-| New RPC URL | `https://trispi.org/rpc` |
+| Network Name | TRISPI Mainnet |
+| RPC URL | `https://fffgfggffff.replit.app/rpc` |
 | Chain ID | `7878` |
 | Currency Symbol | `TRP` |
-| Block Explorer URL | `https://trispi.org` |
-
-3. Click **Save** — TRISPI is now in your MetaMask.
+| Explorer | `https://fffgfggffff.replit.app` |
 
 ---
 
-## Energy Provider — Earn TRP
+## API Reference
 
-Earn TRP tokens by contributing your **real** CPU/GPU compute to the TRISPI AI network.
-
-The client downloads a neural network, runs **real NumPy gradient descent** on your hardware, and submits gradients back — genuine federated learning.
-
-```bash
-pip install requests psutil numpy
-
-# CPU (basic):
-python3 energy-provider/trispi_energy_provider.py \
-  --wallet trp1YOUR_ADDRESS \
-  --id my_server_01
-
-# GPU (NVIDIA):
-python3 energy-provider/trispi_energy_provider.py \
-  --wallet trp1YOUR_ADDRESS \
-  --gpu \
-  --id my_server_01
-
-# Connect to your own local node:
-python3 energy-provider/trispi_energy_provider.py \
-  --server http://localhost:8000 \
-  --wallet trp1YOUR_ADDRESS
-```
-
-**What your device does:**
-1. Downloads AI model weights + training mini-batch from TRISPI node
-2. Runs 5 gradient descent steps (real NumPy ops on your CPU/GPU)
-3. Sends back computed gradients (federated averaging)
-4. Earns TRP rewards based on compute quality
-
-**Reward Formula:**
-- **Heartbeat** (every 15 s): `block_subsidy / active_providers × compute_multiplier`
-- **AI Training Task**: `0.05 TRP × quality_score`
-- **Fraud Check Task**: `0.001 TRP × accuracy`
-
-**Requirements:** Python 3.8+, `pip install requests psutil numpy`
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/network/status` | GET | Block height, nodes, AI accuracy, energy sensors |
+| `/api/p2p/bootstrap` | GET | Bootstrap data: chain height, peer ID, libp2p addrs |
+| `/api/p2p/blocks/range?from=X&to=Y` | GET | Download blocks in batches (100/request) |
+| `/api/p2p/peers` | GET | Connected P2P peer IDs |
+| `/api/chain/genesis-state` | GET | All 1055 account balances (live state) |
+| `/api/explorer/blocks` | GET | Recent blocks with AI scores |
+| `/api/poi/score-block` | POST | Submit PoI score for a block |
+| `/api/federated/register` | POST | Register as FL gradient provider |
+| `/api/federated/submit-gradient` | POST | Submit encrypted FL gradient |
+| `/api/federated/round-status` | GET | Current FL round status |
+| `/api/federated/verify-round/{id}` | GET | Verify FL aggregation vs on-chain hash |
+| `/api/validators/register` | POST | Register as PoI validator |
+| `/api/validators/submit-score` | POST | Submit block validation score |
+| `/api/balance/{address}` | GET | TRP balance |
+| `/api/tokens/transfer` | POST | Transfer TRP |
+| `/api/gas/estimate` | GET | Dynamic EIP-1559 base fee |
+| `/api/docs` | GET | Full Swagger UI |
 
 ---
 
-## Run a Full Node
+## Architecture
 
-See [NODE_SETUP.md](NODE_SETUP.md) for the complete guide. Quick reference:
-
-```bash
-git clone https://github.com/TRISPIAINETWORK/TRISPI.git
-cd TRISPI
-
-# 1. Install Python dependencies
-pip install -r requirements.txt
-
-# 2. Start Python AI service (port 8000)
-cd python-ai-service
-uvicorn app.main_simplified:app --host 0.0.0.0 --port 8000
-
-# 3. Start Go consensus node (port 8081) in another terminal
-./go-consensus/trispi-consensus -id node1 -http 8081 -port 50051
-
-# 4. Register your node with mainnet
-curl -X POST https://trispi.org/api/network/peers/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "node_id":   "my_node_01",
-    "address":   "YOUR_PUBLIC_IP:50051",
-    "node_type": "full_node"
-  }'
 ```
-
-### Become a Validator (requires 10,000 TRP stake)
-
-```bash
-curl -X POST https://trispi.org/api/validators/stake \
-  -H "Content-Type: application/json" \
-  -d '{
-    "validator": "my_node_01",
-    "amount":    10000
-  }'
+Energy Providers ──► Python AI Service  :8000  (FastAPI · PoI · FL · Fraud model)
+                              │ /api/* serves wallets + dApps
+                              │ syncs blocks ↔ Go
+                              ▼
+                    Go Consensus Node   :8181  (PBFT · libp2p P2P)
+                              │ P2P :50052  (block propagation)
+                              ▼
+                    Rust Core Bridge    :6000  (EVM · WASM · PQC signing)
+                              │
+                    PostgreSQL          :5432  (full chain history)
 ```
-
----
-
-## Create a Blockchain on TRISPI
-
-TRISPI lets you scaffold a full parachain project and connect it as a subnet. See [docs/BLOCKCHAIN_CREATION.md](docs/BLOCKCHAIN_CREATION.md) for the full guide.
-
-### Scaffold in one command
-
-```bash
-# Go parachain:
-curl -X POST https://trispi.org/api/chains/scaffold \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chain_name":   "my-chain",
-    "language":     "go",
-    "block_time":   15,
-    "token_name":   "MYTOKEN",
-    "token_symbol": "MYT"
-  }' -o my-chain.zip
-
-# Rust / CosmWasm:
-curl -X POST https://trispi.org/api/chains/scaffold \
-  -H "Content-Type: application/json" \
-  -d '{"chain_name":"my-chain","language":"rust","block_time":10}' \
-  -o my-chain.zip
-
-# Solidity / EVM (Hardhat):
-curl -X POST https://trispi.org/api/chains/scaffold \
-  -H "Content-Type: application/json" \
-  -d '{"chain_name":"my-chain","language":"solidity","block_time":12}' \
-  -o my-chain.zip
-```
-
-### Connect to TRISPI mainnet
-
-```bash
-unzip my-chain.zip -d my-chain
-cd my-chain
-
-# The included script registers your chain and starts syncing:
-bash connect-to-trispi.sh
-
-# Or point at a specific node:
-TRISPI_NODE_URL=http://YOUR_NODE:8000 bash connect-to-trispi.sh
-```
-
----
-
-## Smart Contracts
-
-TRISPI supports **Solidity (EVM)** and **WebAssembly (WASM)** contracts natively.
-
-```bash
-# Deploy a Solidity contract:
-curl -X POST https://trispi.org/api/engine/deploy \
-  -H "Content-Type: application/json" \
-  -d '{
-    "creator":   "trp1YOUR_ADDRESS",
-    "bytecode":  "0x6080604052...",
-    "runtime":   "evm",
-    "gas_limit": 3000000
-  }'
-
-# Deploy a WASM contract:
-curl -X POST https://trispi.org/api/engine/deploy \
-  -H "Content-Type: application/json" \
-  -d '{
-    "creator":  "trp1YOUR_ADDRESS",
-    "bytecode": "AGFzbQE...",
-    "runtime":  "wasm"
-  }'
-
-# Call a contract:
-curl -X POST https://trispi.org/api/engine/call \
-  -H "Content-Type: application/json" \
-  -d '{
-    "caller":           "trp1YOUR_ADDRESS",
-    "contract_address": "trp1CONTRACT",
-    "method":           "transfer",
-    "args":             ["trp1RECIPIENT", 1000],
-    "gas_limit":        100000
-  }'
-```
-
-See [contracts/examples/](contracts/examples/) for full templates.
-
----
-
-## SDK & API
-
-### TypeScript SDK
-
-```typescript
-import { TrispiClient } from './sdk/typescript';
-
-const client = new TrispiClient('https://trispi.org');
-
-// Get balance
-const balance = await client.getBalance('trp1YOUR_ADDRESS');
-
-// Transfer TRP
-await client.transfer({
-  from:   'trp1sender',
-  to:     'trp1recipient',
-  amount: 100
-});
-
-// Get network overview
-const network = await client.getNetworkOverview();
-```
-
-### Python SDK
-
-```python
-import requests
-
-NODE = "https://trispi.org"
-
-# Balance
-r = requests.get(f"{NODE}/api/balance/trp1YOUR_ADDRESS")
-print(r.json())  # {"address": "trp1...", "balance": 1250.75}
-
-# Transfer
-r = requests.post(f"{NODE}/api/tokens/transfer", json={
-    "from_address": "trp1sender",
-    "to_address":   "trp1recipient",
-    "amount":       100.0
-})
-
-# Deploy contract
-r = requests.post(f"{NODE}/api/engine/deploy", json={
-    "creator":  "trp1YOUR_ADDRESS",
-    "bytecode": "0x6080...",
-    "runtime":  "evm"
-})
-```
-
-**Full API reference:** [docs/API.md](docs/API.md)
 
 ---
 
@@ -339,34 +276,19 @@ r = requests.post(f"{NODE}/api/engine/deploy", json={
 
 ```
 TRISPI/
-├── contracts/                # Smart contract examples & templates
-│   ├── examples/             #   Solidity (EVM) + WASM + Hybrid
-│   └── templates/            #   Starter templates
-├── docs/                     # Developer documentation
-│   ├── API.md                #   Full REST API reference
-│   ├── BLOCKCHAIN_CREATION.md#   Create & connect a blockchain
-│   ├── NODE_OPERATOR_GUIDE.md#   Node operator guide
-│   └── WHITEPAPER.md         #   Technical whitepaper
-├── energy-provider/          # Energy Provider scripts (earn TRP)
-│   ├── trispi_energy_provider.py
-│   └── README.md
-├── examples/                 # API usage examples (Python, JS, curl)
-│   ├── deploy_contract.py
-│   ├── energy_provider.py
-│   ├── query_api.py
-│   └── build-a-node/
-├── miner/                    # Mining client
-├── scripts/                  # Utility scripts
-│   └── join-network.py       #   Auto-connect your node to mainnet
-├── sdk/                      # TypeScript & Python SDK
-│   ├── typescript/
-│   └── python/
-├── docker-compose.trispi.yml # Full stack Docker
-├── docker-compose.node.yml   # Single node Docker
-├── genesis.json              # Network genesis block
-├── NODE_SETUP.md             # Complete node setup guide
-├── WHITEPAPER.md             # TRISPI Whitepaper
-└── CONTRIBUTING.md           # How to contribute
+├── trispi/
+│   ├── python-ai-service/app/
+│   │   ├── main_fast.py          # Fast gateway + all API endpoints
+│   │   ├── autonomous_agents.py  # ValidatorAgent + ComputeProviderAgent
+│   │   ├── federated_learning_v2.py  # FL aggregation + on-chain commitment
+│   │   └── pg_persist.py         # PostgreSQL persistence
+│   ├── go-consensus/
+│   │   ├── trispi-consensus      # Pre-built Go binary (Linux x64)
+│   │   └── p2p_api.go            # P2P sync protocol implementation
+│   ├── trispi_energy_provider.py # Standalone energy provider script
+│   └── start_backend.sh          # Start all services
+├── README.md
+└── LICENSE
 ```
 
 ---
@@ -375,22 +297,9 @@ TRISPI/
 
 | Platform | Link |
 |----------|------|
-| 🌐 Website | [trispi.org](https://trispi.org) |
+| 🌐 Website | [fffgfggffff.replit.app](https://fffgfggffff.replit.app) |
 | 💬 Telegram | [@trispiainetwork](https://t.me/trispiainetwork) |
-| 🐦 X / Twitter | [@trispinetwork](https://x.com/trispinetwork) |
-| 💼 LinkedIn | [TRISPI AI Network](https://linkedin.com/company/trispi-ai-network) |
-| 🐙 GitHub | [TRISPIAINETWORK](https://github.com/TRISPIAINETWORK) |
-
----
-
-## Contributing
-
-We welcome all contributions!
-
-- 🐛 **Bug reports** → [GitHub Issues](https://github.com/TRISPIAINETWORK/TRISPI/issues)
-- 💡 **Feature requests** → [GitHub Discussions](https://github.com/TRISPIAINETWORK/TRISPI/discussions)
-- 🔒 **Security** → see [CONTRIBUTING.md](CONTRIBUTING.md)
-- 📖 **Docs / code** → open a Pull Request to `main`
+| 🐙 GitHub | [TRISPIAINETWORK/TRISPI](https://github.com/TRISPIAINETWORK/TRISPI) |
 
 ---
 

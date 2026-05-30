@@ -2784,11 +2784,104 @@ Energy Providers     any     3-loop script (PoI + FL + TX validation)`}
             </div>
           </div>
 
-          <div style={{ padding: '16px 20px', background: C.green + '15', border: `1px solid ${C.green}40`, borderRadius: '10px', marginBottom: '24px' }}>
-            <div style={{ fontWeight: '700', color: C.text, marginBottom: '4px' }}>Any TRISPI node is an RPC — no central server</div>
-            <div style={{ fontSize: '14px', color: C.textMuted, lineHeight: '1.6' }}>
-              Every node you run automatically exposes a MetaMask-compatible JSON-RPC endpoint at <code style={{ background: C.bgSoft, padding: '1px 5px', borderRadius: '4px', fontFamily: 'monospace' }}>/rpc</code>.
-              There is no central RPC provider — the network is as decentralized as the nodes running it.
+          {/* ── NODE TYPES ── */}
+          <div className="trispi-card" style={T.card}>
+            <h2 style={T.h2}>Choose Your Node Type</h2>
+            <p style={{ color: C.textMuted, fontSize: '14px', marginBottom: '20px', lineHeight: '1.6' }}>
+              Three ways to join the TRISPI network — from a simple 2-command script to a full validator node participating in consensus.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '8px' }}>
+              {[
+                {
+                  name: 'Energy Provider',
+                  badge: 'Easiest · 2 min',
+                  badgeColor: C.green,
+                  desc: 'Python script only. No Docker, no Go. Earn TRP by scoring blocks and submitting FL gradients.',
+                  reqs: 'Python 3.9+, 1 GB RAM',
+                  earns: 'TRP per block scored + FL round',
+                  data: 'Polls /api/explorer/blocks every 20s for new blocks → scores locally → posts verdict',
+                },
+                {
+                  name: 'Validator Node',
+                  badge: 'Full Stack · 10 min',
+                  badgeColor: C.blue,
+                  desc: 'Python + Go + Rust. Participates in PBFT consensus, receives real-time P2P blocks, earns block rewards.',
+                  reqs: '4 CPU cores, 8 GB RAM, port 50052 open',
+                  earns: '10 TRP block reward + priority fees',
+                  data: 'Go syncs via P2P libp2p from mainnet → Python scores blocks → Rust signs with PQC',
+                },
+                {
+                  name: 'Full Node (Observer)',
+                  badge: 'Storage · 5 min',
+                  badgeColor: C.purple,
+                  desc: 'Full chain history stored in PostgreSQL. Serves API to wallets and dApps. No consensus participation.',
+                  reqs: '2 CPU cores, 4 GB RAM, 20 GB disk',
+                  earns: 'No direct rewards — serves network',
+                  data: 'Bulk syncs chain via /api/p2p/blocks/range → stores in PG → exposes /api/* to dApps',
+                },
+              ].map(n => (
+                <div key={n.name} style={{ background: C.bgSoft, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <div style={{ fontWeight: '700', fontSize: '15px', color: C.text }}>{n.name}</div>
+                    <span style={{ fontSize: '11px', fontWeight: '600', color: n.badgeColor, background: n.badgeColor + '18', padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap' }}>{n.badge}</span>
+                  </div>
+                  <p style={{ fontSize: '13px', color: C.textMuted, lineHeight: '1.6', margin: '0 0 12px 0' }}>{n.desc}</p>
+                  <div style={{ fontSize: '12px', color: C.textMid, lineHeight: '1.7' }}>
+                    <div><strong>Requirements:</strong> {n.reqs}</div>
+                    <div><strong>Earns:</strong> {n.earns}</div>
+                  </div>
+                  <div style={{ marginTop: '10px', padding: '8px 10px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: '6px', fontSize: '11px', color: C.textMuted, fontFamily: 'monospace', lineHeight: '1.6' }}>
+                    {n.data}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── DATA FLOW ── */}
+          <div className="trispi-card" style={T.card}>
+            <h2 style={T.h2}>How Network Data Reaches Your Node</h2>
+            <p style={{ color: C.textMuted, fontSize: '14px', marginBottom: '16px', lineHeight: '1.6' }}>
+              All nodes bootstrap from the mainnet via HTTPS — no special firewall rules needed for initial sync.
+              After sync, Go nodes receive new blocks in real-time via libp2p P2P.
+            </p>
+            <CodeBlock title="Step-by-step: how a new node gets live chain data" code={`# 1. Bootstrap — fetch chain snapshot from mainnet
+GET https://fffgfggffff.replit.app/api/p2p/bootstrap
+→ returns: chain_height, peer_id, libp2p_addrs, bootstrap_url
+
+# 2. Bulk sync — download all blocks in batches of 100
+GET https://fffgfggffff.replit.app/api/p2p/blocks/range?from=0&to=100
+GET https://fffgfggffff.replit.app/api/p2p/blocks/range?from=100&to=200
+... (repeat until from >= chain_height)
+
+# 3. Account state — get all live balances
+GET https://fffgfggffff.replit.app/api/chain/genesis-state
+→ 1055 accounts with current TRP balances
+
+# 4. Live P2P — receive new blocks in real-time
+./trispi-consensus -bootstrap https://fffgfggffff.replit.app \\
+  -libp2p-port 50052
+→ Go connects via libp2p, receives blocks every ~15 sec
+
+# 5. Energy provider — connect to any node's Python API
+python3 trispi_energy_provider.py \\
+  --server https://fffgfggffff.replit.app`} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginTop: '16px' }}>
+              {[
+                { label: 'Bootstrap endpoint', value: 'GET /api/p2p/bootstrap', desc: 'Chain height, peer ID, libp2p addresses' },
+                { label: 'Block range sync', value: 'GET /api/p2p/blocks/range', desc: '100 blocks per request, from=X&to=Y' },
+                { label: 'Peer list', value: 'GET /api/p2p/peers', desc: 'Connected Go node peer IDs' },
+                { label: 'Full state', value: 'GET /api/chain/genesis-state', desc: 'All 1055 accounts with live balances' },
+                { label: 'Score a block', value: 'POST /api/poi/score-block', desc: 'Submit PoI score for a block hash' },
+                { label: 'FL gradient', value: 'POST /api/federated/submit-gradient', desc: 'Submit FL gradient for current round' },
+              ].map(e => (
+                <div key={e.label} style={{ background: C.bgSoft, borderRadius: '8px', padding: '12px 14px' }}>
+                  <div style={{ fontSize: '11px', color: C.textMuted, fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>{e.label}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '12px', color: C.accent, fontWeight: '600', marginBottom: '4px' }}>{e.value}</div>
+                  <div style={{ fontSize: '12px', color: C.textMuted }}>{e.desc}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -2847,7 +2940,7 @@ sudo journalctl -u trispi-provider -f`} />
 cd TRISPI
 
 # Set the genesis node URL (the network bootstrap):
-export TRISPI_BOOTSTRAP=https://trispi-mainnet.replit.app
+export TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app
 
 # One command — downloads chain, verifies state, starts Docker:
 bash join_trispi_network.sh`} />
@@ -2887,8 +2980,8 @@ cd TRISPI
 # Configure your node:
 cat > .env.node << EOF
 NODE_ID=my-node-001
-TRISPI_BOOTSTRAP=https://trispi-mainnet.replit.app
-TRISPI_BOOTSTRAP_PEER=/dns4/trispi-mainnet.replit.app/tcp/50052/p2p/12D3KooWEYVwoztgTfwXDob7VVZfY4cuVFCP6g7Fe7p4eWkaAXaa
+TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app
+TRISPI_BOOTSTRAP_PEER=/dns4/fffgfggffff.replit.app/tcp/50052/p2p/12D3KooWPR3pFyevgAtZWHGiM4e1RBKQVVXLF3TRbKzT7dvHjjWH
 BLOCK_MINED_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(24))")
 DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_hex(16))")
 EOF
@@ -2913,16 +3006,16 @@ docker compose down -v                   # stop + wipe data (reset)`} />
 pip install -r requirements.txt
 
 # Set bootstrap to auto-sync chain on startup:
-export TRISPI_BOOTSTRAP=https://trispi-mainnet.replit.app
+export TRISPI_BOOTSTRAP=https://fffgfggffff.replit.app
 
 uvicorn app.main_fast:app --host 0.0.0.0 --port 8000`} />
             <CodeBlock title="Go Consensus Node (port 8181 + P2P 50052)" code={`cd go-consensus
 # Pre-built binary included (Linux x64). To rebuild:
 go build -o trispi-consensus .
 
-# Connect to bootstrap peer:
-./trispi-consensus -id my-node-001 -http 8181 -port 50052 \\
-  -bootstrap /dns4/trispi-mainnet.replit.app/tcp/50052/p2p/12D3KooWEYVwoztgTfwXDob7VVZfY4cuVFCP6g7Fe7p4eWkaAXaa`} />
+# Connect to mainnet bootstrap:
+./trispi-consensus -id my-node-001 -http 8181 -libp2p-port 50052 \\
+  -bootstrap https://fffgfggffff.replit.app`} />
             <CodeBlock title="Rust Core Bridge (port 6000)" code={`cd rust-core
 # Pre-built binary at target/release/trispi-core. To rebuild:
 # sudo apt install build-essential pkg-config libssl-dev
@@ -3037,7 +3130,7 @@ curl $TRISPI_NODE_URL/api/explorer/blocks | python3 -m json.tool`} />
                 </div>
               ))}
             </div>
-            <CodeBlock title="Verify your node synced correctly" code={`BOOTSTRAP=https://trispi-mainnet.replit.app
+            <CodeBlock title="Verify your node synced correctly" code={`BOOTSTRAP=https://fffgfggffff.replit.app
 NODE=http://localhost:8000
 
 # Check snapshot from bootstrap:
