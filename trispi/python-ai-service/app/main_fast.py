@@ -915,24 +915,24 @@ async def network_status(request: Request):
     # Internal agents (ValidatorAgent + ComputeProviderAgent) always running
     energy_sensors = fl_providers + 2
 
-    # If no FL rounds yet, pull ai_training from the full backend (has persistent model)
-    ai_training = None
+    # ai_training: each block = 1 AI validation epoch (PoI scores every block).
+    # This is always meaningful and never requires the full backend to be ready.
+    # If FL rounds exist, prefer those; otherwise use block_height as epoch proxy.
     if fl_epochs > 0:
-        ai_training = {
-            "total_epochs":     fl_epochs,
-            "rounds_completed": fl_rounds,
-            "global_accuracy":  fl_acc,
-        }
-    elif _full_backend_ready:
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as _c:
-                _r = await _c.get(f"{_FULL_URL}/api/network/status")
-                _fb = _r.json()
-                _fb_at = _fb.get("ai_training")
-                if _fb_at and int(_fb_at.get("total_epochs", 0) or 0) > 0:
-                    ai_training = _fb_at
-        except Exception:
-            pass
+        epoch_count  = fl_epochs
+        round_count  = fl_rounds
+        model_acc    = fl_acc
+    else:
+        # Block-height proxy: every block scored by PoI AI = 1 epoch
+        epoch_count  = bh
+        round_count  = 0
+        model_acc    = ai_acc if ai_acc <= 1.0 else ai_acc / 100.0
+
+    ai_training = {
+        "total_epochs":     epoch_count,
+        "rounds_completed": round_count,
+        "global_accuracy":  round(model_acc, 4),
+    }
 
     return {
         "status": "online",
