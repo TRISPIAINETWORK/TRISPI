@@ -305,29 +305,49 @@ async def _block_heartbeat_loop() -> None:
     Submit periodic system TXs so Go always has pending transactions to include.
 
     Without pending transactions, Go logs 'tx_root_empty=true' and pauses block
-    production each tick.  A zero-value heartbeat TX from the service key breaks
-    the chicken-and-egg deadlock, ensuring blocks are minted every ~15 seconds.
+    production each tick.  A heartbeat TX breaks the deadlock, ensuring blocks
+    are minted every ~15 seconds rather than every 1-2 minutes.
+
+    Strategy: call the full-backend /api/tokens/transfer (which has the founder
+    wallet key) to send a tiny self-transfer.  Falls back to a direct Go /tx via
+    the service key if the full backend is not ready yet.
     """
     global _LIVE_AI_ACCURACY
-    await asyncio.sleep(45)   # wait for Go to register service key
+    await asyncio.sleep(45)   # wait for Go + full backend to register
     while True:
         try:
-            if _AGENTS_OK and _agents_post_tx and _agents_load_service_key:
+            # Prefer full backend (has founder key with balance)
+            sent = False
+            if _full_backend_ready:
+                try:
+                    async with httpx.AsyncClient(timeout=4.0) as c:
+                        r = await c.post(
+                            "http://127.0.0.1:8001/api/tokens/transfer",
+                            json={
+                                "from_address": "trp1adc494126fae8ef6f06eb750c0e4f0e189a440",
+                                "to_address":   "trp1_system_reserve",
+                                "amount":       0.001,
+                                "memo":         "network_heartbeat",
+                            },
+                            timeout=4.0,
+                        )
+                        sent = r.status_code < 300
+                except Exception:
+                    pass
+
+            # Fallback: direct TX via service key (works once service key has TRP)
+            if not sent and _AGENTS_OK and _agents_post_tx and _agents_load_service_key:
                 svc       = _agents_load_service_key()
                 from_addr = svc.get("address", "trp1_system_node")
                 ts        = int(time.time())
                 await _agents_post_tx(
                     from_addr = from_addr,
                     to_addr   = "trp1_system_reserve",
-                    amount    = 0.0,
-                    data      = json.dumps({
-                        "type":       "network_heartbeat",
-                        "ts":         ts,
-                        "source":     "fast-gateway",
-                        "fee_burn":   True,
-                    }),
+                    amount    = 0.001,
+                    data      = json.dumps({"type": "network_heartbeat", "ts": ts}),
                 )
-            # Also refresh live AI accuracy from PoI consensus
+
+            # Refresh live AI accuracy from PoI consensus
             if _AGENTS_OK and _block_score_collector:
                 recent = _block_score_collector.recent_consensus(limit=100)
                 finalized = [r.get("consensus_score", 0.0) for r in recent if r.get("finalized")]
