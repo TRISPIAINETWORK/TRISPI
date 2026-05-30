@@ -153,6 +153,11 @@ _START_TIME = time.time()
 _GENESIS_ROOT = "619ccc30de1d6afb9ff81f44099fe67af0903e9f51e2e6fd74546ac1104d0a63"
 _current_state_root = _GENESIS_ROOT
 
+# Live network metrics — updated by Go callbacks and agent consensus
+_LIVE_BASE_FEE: float = 0.0        # real base_fee from last Go block (updated by block-mined callback)
+_LIVE_AI_ACCURACY: float = 0.0    # rolling average from PoI consensus scores (updated by ValidatorAgent)
+_LIVE_PROOF_COUNT: int = 0         # cached AI proof count from PG (updated every 60 s)
+
 # PostgreSQL persistence (initialised in startup)
 _pg = None
 
@@ -276,6 +281,11 @@ async def _init_pg() -> None:
         asyncio.create_task(_pg_sync_loop())
         # Push any PG-persisted blocks back to Go so chain height survives restarts
         asyncio.create_task(_startup_push_pg_blocks_to_go())
+        # Submit periodic system TXs so Go always has pending transactions
+        # (without TXs, Go pauses block production — tx_root_empty=true)
+        asyncio.create_task(_block_heartbeat_loop())
+        # Update AI proof count cache every 60 s
+        asyncio.create_task(_update_proof_count_loop())
 
 
 async def _pg_sync_loop() -> None:
@@ -288,6 +298,61 @@ async def _pg_sync_loop() -> None:
         except Exception as e:
             print(f"[fast] pg_sync_loop error: {e}")
         await asyncio.sleep(30)
+
+
+async def _block_heartbeat_loop() -> None:
+    """
+    Submit periodic system TXs so Go always has pending transactions to include.
+
+    Without pending transactions, Go logs 'tx_root_empty=true' and pauses block
+    production each tick.  A zero-value heartbeat TX from the service key breaks
+    the chicken-and-egg deadlock, ensuring blocks are minted every ~15 seconds.
+    """
+    global _LIVE_AI_ACCURACY
+    await asyncio.sleep(45)   # wait for Go to register service key
+    while True:
+        try:
+            if _AGENTS_OK and _agents_post_tx and _agents_load_service_key:
+                svc       = _agents_load_service_key()
+                from_addr = svc.get("address", "trp1_system_node")
+                ts        = int(time.time())
+                await _agents_post_tx(
+                    from_addr = from_addr,
+                    to_addr   = "trp1_system_reserve",
+                    amount    = 0.0,
+                    data      = json.dumps({
+                        "type":       "network_heartbeat",
+                        "ts":         ts,
+                        "source":     "fast-gateway",
+                        "fee_burn":   True,
+                    }),
+                )
+            # Also refresh live AI accuracy from PoI consensus
+            if _AGENTS_OK and _block_score_collector:
+                recent = _block_score_collector.recent_consensus(limit=100)
+                finalized = [r.get("consensus_score", 0.0) for r in recent if r.get("finalized")]
+                if finalized:
+                    _LIVE_AI_ACCURACY = sum(finalized) / len(finalized)
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+
+async def _update_proof_count_loop() -> None:
+    """Every 60 s update the cached AI proof count from PG."""
+    global _LIVE_PROOF_COUNT
+    await asyncio.sleep(30)
+    while True:
+        try:
+            if _pg and _pg._pool:
+                async with _pg._pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT COUNT(*) AS cnt FROM trispi_ai_proofs"
+                    )
+                    _LIVE_PROOF_COUNT = int(row["cnt"] or 0)
+        except Exception:
+            pass
+        await asyncio.sleep(60)
 
 
 async def _startup_push_pg_blocks_to_go() -> None:
@@ -676,17 +741,30 @@ async def mpt_root(request: Request):
 @app.post("/api/state/derive")
 async def state_derive(request: Request):
     global _current_state_root
-    # Never forward to full backend — always computed locally so the root
-    # is never empty (full backend may return "" before its DB loads).
+    # Never forward to full backend — always computed locally.
+    # FAST PATH: Go calls this every block tick. Must respond in < 100 ms.
+    # When no transactions, return cached root immediately without any IO.
     try:
         body = await request.json()
     except Exception:
         body = {}
 
-    prev_raw  = body.get("prev_state_root") or _current_state_root or _GENESIS_ROOT
-    txs       = body.get("transactions") or []
+    txs = body.get("transactions") or []
 
-    # Normalise: strip 0x, ensure even-length hex, fall back to genesis
+    # ── Fast path: no transactions → return cached root immediately (< 1 ms) ──
+    if not txs:
+        root = _current_state_root or _GENESIS_ROOT
+        return {
+            "state_root":      root,
+            "post_state_root": root,
+            "root":            root,
+            "prev_state_root": root,
+            "tx_count":        0,
+            "source":          "cached-fast",
+        }
+
+    # ── Slow path: compute new state root for non-empty tx set ──────────────
+    prev_raw   = body.get("prev_state_root") or _current_state_root or _GENESIS_ROOT
     prev_clean = prev_raw.lstrip("0x").strip()
     if len(prev_clean) % 2 != 0:
         prev_clean = "0" + prev_clean
@@ -700,13 +778,10 @@ async def state_derive(request: Request):
     )).encode()
 
     new_root = hashlib.sha3_256(prev_bytes + tx_bytes).hexdigest()
-
-    if txs:
-        _current_state_root = new_root
-        # Persist state root to PostgreSQL so it survives restarts
-        if _pg:
-            asyncio.create_task(_pg.update_balance("__state_root__", 0))  # trigger conn keep-alive
-            asyncio.create_task(_save_state_root(new_root))
+    _current_state_root = new_root
+    # Persist state root asynchronously (does not block response)
+    if _pg:
+        asyncio.create_task(_save_state_root(new_root))
 
     return {
         "state_root":      new_root,
@@ -886,7 +961,25 @@ async def network_status(request: Request):
     go = await _go("/network/stats") or {}
     bh = int(go.get("total_blocks", go.get("block_height", 0)) or 0)
     peers = int(go.get("connected_peers", go.get("peer_count", 1)) or 1)
-    ai_acc = float(go.get("ai_accuracy", 0.85) or 0.85)
+
+    # ── Real AI accuracy from PoI consensus scores ─────────────────────────────
+    # Go initializes AIAccuracy=0.97 (static); per-block ai_score is 0.76-0.78.
+    # Use the rolling average of actual consensus scores from _block_score_collector.
+    # Fall back to _LIVE_AI_ACCURACY (updated by heartbeat loop) or Go's value.
+    ai_acc = 0.0
+    try:
+        if _AGENTS_OK and _block_score_collector:
+            recent = _block_score_collector.recent_consensus(limit=50)
+            finalized = [r.get("consensus_score", 0.0) for r in recent if r.get("finalized")]
+            if finalized:
+                ai_acc = sum(finalized) / len(finalized)
+    except Exception:
+        pass
+    if ai_acc <= 0:
+        ai_acc = _LIVE_AI_ACCURACY if _LIVE_AI_ACCURACY > 0 else float(go.get("ai_accuracy", 0.77) or 0.77)
+        # Clamp Go's static 0.97 default — real PoI scores are in 0.70-0.85 range
+        if ai_acc > 0.90:
+            ai_acc = 0.77
 
     # ── FL training stats ──────────────────────────────────────────────────────
     fl_rounds = 0
@@ -915,18 +1008,22 @@ async def network_status(request: Request):
     # Internal agents (ValidatorAgent + ComputeProviderAgent) always running
     energy_sensors = fl_providers + 2
 
-    # ai_training: each block = 1 AI validation epoch (PoI scores every block).
-    # This is always meaningful and never requires the full backend to be ready.
-    # If FL rounds exist, prefer those; otherwise use block_height as epoch proxy.
+    # ── Real AI epoch count from PG (actual scored blocks, not block height) ──
+    # _LIVE_PROOF_COUNT = count of trispi_ai_proofs rows (updated every 60 s).
+    # This reflects the number of actual AI validation events, not block height.
     if fl_epochs > 0:
-        epoch_count  = fl_epochs
-        round_count  = fl_rounds
-        model_acc    = fl_acc
+        epoch_count = fl_epochs
+        round_count = fl_rounds
+        model_acc   = fl_acc
+    elif _LIVE_PROOF_COUNT > 0:
+        epoch_count = _LIVE_PROOF_COUNT
+        round_count = 0
+        model_acc   = ai_acc
     else:
-        # Block-height proxy: every block scored by PoI AI = 1 epoch
-        epoch_count  = bh
-        round_count  = 0
-        model_acc    = ai_acc if ai_acc <= 1.0 else ai_acc / 100.0
+        # Very early startup — use a small estimate, not block height
+        epoch_count = max(bh // 10, 1)  # ~1 epoch per 10 blocks until PG loads
+        round_count = 0
+        model_acc   = ai_acc
 
     ai_training = {
         "total_epochs":     epoch_count,
@@ -987,14 +1084,19 @@ async def gas_estimate(request: Request):
     if r := await _forward(request):
         return r
     go = await _go("/network/stats") or {}
-    # Go always returns base_fee=1 when no txns — compute EIP-1559 style dynamic fee
-    # that grows logarithmically with block height (realistic for a growing network)
     import math as _math
-    raw_fee = float(go.get("base_fee", 1.0) or 1.0)
     bh = int(go.get("total_blocks", go.get("block_height", 9818)) or 9818)
-    if raw_fee >= 1.0:
-        # 0.001 TRP at genesis, +log growth; stays well below 1 TRP for years
-        raw_fee = round(0.001 * (1.0 + _math.log(max(bh, 1)) / 15.0), 6)
+    # Use real base_fee from last Go block if available (updated by block-mined callback)
+    # Go always returns base_fee=1 when no txns, so fall back to EIP-1559 log formula
+    if _LIVE_BASE_FEE > 0 and _LIVE_BASE_FEE < 10.0:
+        raw_fee = _LIVE_BASE_FEE
+    else:
+        go_fee = float(go.get("base_fee", 0.0) or 0.0)
+        if 0 < go_fee < 1.0:
+            raw_fee = go_fee
+        else:
+            # EIP-1559 formula: 0.001 TRP at genesis, grows with block height
+            raw_fee = round(0.001 * (1.0 + _math.log(max(bh, 1)) / 15.0), 6)
     priority_fee = round(raw_fee * 0.1, 6)
     return {
         "base_fee": raw_fee,
@@ -1470,6 +1572,12 @@ async def block_mined_callback(request: Request):
             print(f"[fast] REJECT block {block_num}: Kyber ai_proof decrypt failed: {e}")
             return JSONResponse(status_code=400,
                                 content={"error": "kyber_decrypt_failed", "block": block_num})
+
+    # ── Update live base_fee from actual block data ───────────────────────────
+    global _LIVE_BASE_FEE
+    block_fee = float(block.get("base_fee", block.get("BaseFee", block.get("gas_price", 0.0))) or 0.0)
+    if 0 < block_fee < 100.0:   # sanity bounds: > 0 and < 100 TRP
+        _LIVE_BASE_FEE = block_fee
 
     # Persist to PostgreSQL in the background
     if _pg and block_num:
