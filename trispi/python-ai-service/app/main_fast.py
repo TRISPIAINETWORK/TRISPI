@@ -1017,18 +1017,42 @@ async def network_status(request: Request):
         "global_accuracy":  round(model_acc, 4),
     }
 
+    # ── Real TRISPI node count ─────────────────────────────────────────────────
+    # libp2p DHT peers (from Go) are random internet nodes (IPFS bootstrap etc.)
+    # — they are NOT TRISPI nodes.  Count only nodes actively participating in
+    # the TRISPI network: registered validators + fleet energy providers + self.
+    trispi_validator_count = 0
+    try:
+        if _AGENTS_OK and _validator_registry:
+            trispi_validator_count = len(_validator_registry.get_all())
+    except Exception:
+        pass
+    fleet_provider_count = 0
+    try:
+        # Fleet provider count comes from the full backend fleet stats
+        if _full_backend_ready:
+            async with httpx.AsyncClient(timeout=1.5) as _c:
+                _fr = await _c.get("http://127.0.0.1:8001/api/fleet/stats")
+                if _fr.status_code == 200:
+                    fleet_provider_count = int(_fr.json().get("active_providers", 0) or 0)
+    except Exception:
+        pass
+    # +1 = this bootstrap server itself (always running)
+    trispi_node_count = 1 + trispi_validator_count + fleet_provider_count
+
     return {
         "status": "online",
         "network": "TRISPI Mainnet",
         "chain_id": 7878,
         "block_height": bh,
-        "node_count": peers,
-        "trispi_nodes": max(peers, 1),
+        "node_count": trispi_node_count,
+        "trispi_nodes": trispi_node_count,
+        "p2p_peers": peers,   # raw libp2p DHT peer count (informational)
         "tps": go.get("tps", 0),
         "consensus": "Proof of Intelligence (PoI)",
         "ai_accuracy": ai_acc,
-        "validator_count": int(go.get("active_validators", go.get("validator_count", 1)) or 1),
-        "active_validators": int(go.get("active_validators", go.get("validator_count", 1)) or 1),
+        "validator_count": max(1, trispi_validator_count),
+        "active_validators": max(1, trispi_validator_count),
         "total_transactions": total_tx,
         "energy_sensors": energy_sensors,
         "active_energy_providers": energy_sensors,
@@ -1559,11 +1583,22 @@ async def block_mined_callback(request: Request):
             return JSONResponse(status_code=400,
                                 content={"error": "kyber_decrypt_failed", "block": block_num})
 
-    # ── Update live base_fee from actual block data ───────────────────────────
-    global _LIVE_BASE_FEE
+    # ── Update live base_fee and AI accuracy from actual block data ──────────
+    global _LIVE_BASE_FEE, _LIVE_AI_ACCURACY
     block_fee = float(block.get("base_fee", block.get("BaseFee", block.get("gas_price", 0.0))) or 0.0)
-    if 0 < block_fee < 100.0:   # sanity bounds: > 0 and < 100 TRP
+    if 0 < block_fee < 100.0:
         _LIVE_BASE_FEE = block_fee
+    # Go computes a real per-block ai_score (0.60-0.85) via computeAIScore().
+    # Use it to keep _LIVE_AI_ACCURACY current — this is the most accurate
+    # signal we have when PoI consensus hasn't accumulated enough samples yet.
+    go_ai_score = float(
+        block.get("ai_score",
+        block.get("AIScore",
+        (block.get("ai_proof") or {}).get("accuracy", 0.0))) or 0.0
+    )
+    if 0.40 < go_ai_score <= 1.0:   # sanity range
+        # EMA blend: 70% previous + 30% new sample (smooth out per-block noise)
+        _LIVE_AI_ACCURACY = _LIVE_AI_ACCURACY * 0.70 + go_ai_score * 0.30 if _LIVE_AI_ACCURACY > 0 else go_ai_score
 
     # Persist to PostgreSQL in the background
     if _pg and block_num:
