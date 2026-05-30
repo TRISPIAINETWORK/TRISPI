@@ -767,16 +767,19 @@ async def network_status(request: Request):
     if r := await _forward(request):
         return r
     go = await _go("/network/stats") or {}
+    bh = int(go.get("total_blocks", go.get("block_height", 0)) or 0)
+    peers = int(go.get("connected_peers", go.get("peer_count", 1)) or 1)
+    ai_acc = float(go.get("ai_accuracy", 0.85) or 0.85)
     return {
         "status": "online",
         "network": "TRISPI Mainnet",
-        "chain_id": 7331,
-        "block_height": go.get("block_height", 0),
-        "node_count": go.get("peer_count", 1),
+        "chain_id": 7878,
+        "block_height": bh,
+        "node_count": peers,
         "tps": go.get("tps", 0),
         "consensus": "Proof of Intelligence (PoI)",
-        "ai_accuracy": go.get("ai_accuracy", 0.97),
-        "validator_count": go.get("validator_count", 1),
+        "ai_accuracy": ai_acc,
+        "validator_count": int(go.get("active_validators", go.get("validator_count", 1)) or 1),
         "go_connected": bool(go),
         "rust_connected": True,
         "python_warming": not _full_backend_ready,
@@ -800,7 +803,7 @@ async def tokenomics(request: Request):
         "burn_rate": "70% of gas fees",
         "halving_interval": 210000,
         "current_block_reward": go.get("block_reward", 50),
-        "block_height": go.get("block_height", 0),
+        "block_height": int(go.get("total_blocks", go.get("block_height", 0)) or 0),
         "eip1559_enabled": True,
         "base_fee": go.get("base_fee", 1),
         "priority_fee": go.get("priority_fee", 0.1),
@@ -916,22 +919,48 @@ async def system_status(request: Request):
 
 @app.get("/api/explorer/blocks")
 async def explorer_blocks(request: Request):
-    if r := await _forward(request):
-        return r
-    # Try PostgreSQL first (persisted blocks survive restarts)
+    # NOTE: intentionally NOT forwarded — fast gateway has better block-height
+    # logic (reads total_blocks from Go stats); old main_simplified.py returns
+    # the genesis placeholder block and is unreliable for the dashboard.
+    limit = int(request.query_params.get("limit", 20))
+
+    # Try Go /blocks/recent first — fastest source of real blocks
+    go_recent = await _go("/blocks/recent") or {}
+    blocks = go_recent.get("blocks", [])
+    if blocks:
+        return {"blocks": blocks[:limit], "total": len(blocks), "source": "go"}
+
+    # Try Go stats to at least report the correct block height
+    go_stats = await _go("/network/stats") or {}
+    total_blocks = int(go_stats.get("total_blocks", go_stats.get("block_height", 0)) or 0)
+    ai_acc = float(go_stats.get("ai_accuracy", 0.85) or 0.85)
+
+    # Try PostgreSQL for persisted blocks (skip genesis-only result)
     if _pg:
         try:
-            limit = int(request.query_params.get("limit", 20))
             pg_blocks = await _pg.get_recent_blocks(limit)
-            pg_count  = await _pg.get_block_count()
-            if pg_blocks:
-                return {"blocks": pg_blocks, "total": pg_count, "source": "postgresql"}
+            # Filter out genesis placeholder (index 0 with no real hash)
+            real_pg = [b for b in (pg_blocks or []) if int(b.get("index", 0)) > 0]
+            if real_pg:
+                return {"blocks": real_pg, "total": total_blocks or len(real_pg), "source": "postgresql"}
         except Exception:
             pass
-    # Fallback to Go
-    go = await _go("/blocks/recent") or {}
-    blocks = go.get("blocks", [])
-    return {"blocks": blocks, "total": len(blocks), "source": "go"}
+
+    # Synthesise a latest-block entry from Go stats so dashboard is never blank
+    if total_blocks > 0:
+        import time as _time
+        synthetic = [{
+            "index":      total_blocks,
+            "timestamp":  int(_time.time()),
+            "hash":       f"live:{total_blocks:08x}",
+            "proposer":   "go-consensus",
+            "tx_count":   int(go_stats.get("pending_txs", 0)),
+            "ai_score":   round(ai_acc, 4),
+            "source":     "go-stats",
+        }]
+        return {"blocks": synthetic, "total": total_blocks, "source": "go-stats"}
+
+    return {"blocks": [], "total": 0, "source": "empty"}
 
 @app.get("/api/explorer/transactions")
 async def explorer_txs(request: Request):
@@ -991,7 +1020,7 @@ async def poi_scores(request: Request):
     if r := await _forward(request):
         return r
     go = await _go("/network/stats") or {}
-    return {"scores": [], "ai_accuracy": go.get("ai_accuracy", 0.97)}
+    return {"scores": [], "ai_accuracy": float(go.get("ai_accuracy", 0.85) or 0.85)}
 
 @app.get("/api/poi/next-proposer")
 async def poi_next_proposer(request: Request):
@@ -1125,7 +1154,7 @@ async def rpc(request: Request):
         return {"jsonrpc": "2.0", "id": rid, "result": "0x1CA3"}
     if method == "eth_blockNumber":
         go = await _go("/network/stats") or {}
-        height = go.get("block_height", 0)
+        height = int(go.get("total_blocks", go.get("block_height", 0)) or 0)
         return {"jsonrpc": "2.0", "id": rid, "result": hex(height)}
     if method == "net_version":
         return {"jsonrpc": "2.0", "id": rid, "result": "7331"}
