@@ -1,0 +1,25 @@
+kind = "web"
+    previewPath = "/"
+    title = "TRISPI Blockchain"
+    version = "1.0.0"
+    id = "artifacts/trispi"
+    router = "path"
+
+    [[integratedSkills]]
+    name = "react-vite"
+    version = "1.0.0"
+
+    [[services]]
+    name = "web"
+    paths = [ "/" ]
+    localPort = 5001
+
+    [services.development]
+    run = "node /home/runner/workspace/trispi/serve_frontend.js"
+
+    [services.production]
+    run = "node /home/runner/workspace/trispi/serve_frontend.js"
+
+    [services.env]
+    PORT = "5001"
+    BASE_PATH = "/"
