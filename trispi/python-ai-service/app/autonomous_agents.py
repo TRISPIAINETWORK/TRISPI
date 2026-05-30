@@ -687,28 +687,57 @@ class ValidatorAgent(BaseAgent):
         """
         Pure-numpy 4-feature PoI scoring.  Deterministic, no external deps.
         Energy provider nodes run the identical algorithm locally.
-        """
-        # Feature 1: transaction quality
-        tx_count    = len(block.get("transactions", []) or [])
-        tx_quality  = float(min(1.0, tx_count / 50.0))
 
-        # Feature 2: block timing vs 15s target
+        AI accuracy = how well the consensus engine performs at its job:
+          - Block production liveness   (was the block produced on schedule?)
+          - Network consensus health    (enough peers for Byzantine tolerance?)
+          - AI proof integrity          (did Go attach a valid AI validation proof?)
+          - Transaction throughput      (bonus when user activity is present)
+        """
+        # Feature 1: Block production liveness
+        # Empty blocks are NORMAL on a young network — the engine IS working if it
+        # produces blocks on schedule.  Give 0.75 baseline for empty blocks; scale
+        # up to 1.0 as transactions fill the block (max at 50 txns).
+        tx_count = len(block.get("transactions", []) or [])
+        block_liveness = 0.75 + 0.25 * float(min(1.0, tx_count / 50.0))
+
+        # Feature 2: block timing regularity (15 s target ± 5 s window = 1.0)
+        # We measure from the BLOCK TIMESTAMP, not from when the validator sees it,
+        # so network latency doesn't falsely penalise the score.
+        # Use the Go ai_score as a proxy when timestamp is unavailable.
+        ai_score_go = float(block.get("ai_score", block.get("AIScore", 0.0)) or 0.0)
         block_ts = float(block.get("timestamp", 0) or 0)
         if block_ts > 0:
             elapsed = time.time() - block_ts
-            timing  = float(max(0.0, 1.0 - abs(elapsed - 15.0) / 30.0))
+            # Validator fetches block within a few seconds of creation; subtract
+            # expected propagation so a freshly scored block doesn't get 0 timing.
+            adjusted = max(0.0, elapsed - 3.0)   # subtract ~3s propagation
+            timing = float(max(0.0, 1.0 - abs(adjusted - 15.0) / 30.0))
+        elif ai_score_go > 0:
+            timing = ai_score_go   # Go's own score as proxy
         else:
-            timing = 0.5
+            timing = 0.75          # default: assume on-schedule
 
-        # Feature 3: network health
+        # Feature 3: network consensus health
+        # TRISPI needs ≥4 peers for BFT — scale to 1.0 at 20 peers.
         peer_count     = int(network_stats.get("peer_count", 5) or 5)
-        network_health = float(min(1.0, peer_count / 10.0))
+        network_health = float(min(1.0, peer_count / 20.0))
 
         # Feature 4: AI proof integrity
-        has_proof = 1.0 if (block.get("ai_proof") or block.get("trust_score")) else 0.5
+        # Go attaches AIProof.Accuracy per block; use it directly when present.
+        ai_proof = block.get("ai_proof") or block.get("AIProof") or {}
+        if isinstance(ai_proof, dict) and ai_proof.get("accuracy", 0) > 0:
+            has_proof = float(min(1.0, ai_proof["accuracy"]))
+        elif block.get("trust_score"):
+            has_proof = float(min(1.0, block["trust_score"]))
+        elif ai_score_go > 0:
+            has_proof = ai_score_go
+        else:
+            has_proof = 0.75       # no proof data yet — assume standard operation
 
-        weights  = np.array([0.30, 0.25, 0.25, 0.20], dtype=np.float32)
-        features = np.array([tx_quality, timing, network_health, has_proof], dtype=np.float32)
+        weights  = np.array([0.35, 0.25, 0.20, 0.20], dtype=np.float32)
+        features = np.array([block_liveness, timing, network_health, has_proof],
+                            dtype=np.float32)
         return float(np.clip(np.dot(weights, features), 0.0, 1.0))
 
     async def run_cycle(self) -> None:
@@ -826,7 +855,7 @@ class ValidatorAgent(BaseAgent):
                 "(tx quality, timing, network health, AI proof integrity). "
                 "External energy provider nodes run the same model locally."
             ),
-            "algorithm":           "weighted_dot_product([tx_quality, timing, health, proof], [0.30,0.25,0.25,0.20])",
+            "algorithm":           "weighted_dot_product([block_liveness, timing, network_health, ai_proof], [0.35,0.25,0.20,0.20])",
             "scores_submitted":    self._scores_submitted,
             "scores_accepted":     self._scores_accepted,
             "trp_earned":          round(self._trp_earned, 4),
